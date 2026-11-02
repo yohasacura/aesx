@@ -1,9 +1,10 @@
 version: 2
 updates:
+  # GitHub Actions are pinned to commit SHAs; Dependabot moves the pins and the version comments.
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: monthly
+      interval: weekly
     groups:
       actions:
         patterns: ["*"]
@@ -12,7 +13,14 @@ updates:
   - package-ecosystem: nuget
     directory: /
     schedule:
-      interval: monthly
+      interval: weekly
     groups:
       test-packages:
         patterns: ["*"]
+
+  # A new .NET SDK patch usually carries runtime security fixes that end up inside the
+  # self-contained binaries, so it should prompt a new release.
+  - package-ecosystem: dotnet-sdk
+    directory: /
+    schedule:
+      interval: weekly

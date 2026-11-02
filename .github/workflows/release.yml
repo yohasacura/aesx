@@ -32,12 +32,12 @@ jobs:
           - { os: ubuntu-24.04-arm, rid: linux-arm64 }
     steps:
       - name: Check out
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          global-json-file: global.json
+          dotnet-version: 10.0.x
 
       - name: Derive version from the tag
         shell: bash
@@ -45,6 +45,8 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "NAME=aesx-$VERSION-${{ matrix.rid }}" >> "$GITHUB_ENV"
+          dotnet --version
+          dotnet --list-runtimes
 
       - name: Test on this platform
         run: dotnet test Aesx.sln --configuration Release
@@ -96,7 +98,7 @@ jobs:
         run: tar -C stage -czf "dist/$NAME.tar.gz" "$NAME"
 
       - name: Upload
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ matrix.rid }}
           path: dist/*
@@ -109,10 +111,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up .NET (to record the toolchain in the notes)
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
 
       - name: Download all binaries
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: dist
           merge-multiple: true
@@ -130,11 +137,11 @@ jobs:
             on { print }
           ' CHANGELOG.md > notes.md
           if [ ! -s notes.md ]; then printf 'aesx %s\n' "$VERSION" > notes.md; fi
+          RUNTIME=$(dotnet --list-runtimes | awk '/Microsoft.NETCore.App/ { v = $2 } END { print v }')
           {
             printf '\n---\n\n'
-            printf 'Verify a download against `SHA256SUMS.txt`: `sha256sum -c SHA256SUMS.txt --ignore-missing` '
-            printf '(PowerShell: `Get-FileHash`). All binaries were built from this tag by GitHub Actions; '
-            printf 'the run is linked on this page.\n'
+            printf 'Built by GitHub Actions from this tag with .NET SDK %s; the self-contained binaries embed .NET runtime %s. ' "$(dotnet --version)" "$RUNTIME"
+            printf 'Verify a download against `SHA256SUMS.txt`: `sha256sum -c SHA256SUMS.txt --ignore-missing` (PowerShell: `Get-FileHash`).\n'
           } >> notes.md
           cat notes.md
 

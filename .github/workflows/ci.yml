@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  schedule:
+    # Weekly, so new package advisories and runtime patches surface even without commits.
+    - cron: '17 6 * * 1'
 
 permissions:
   contents: read
@@ -34,14 +37,21 @@ jobs:
             rid: osx-arm64
     steps:
       - name: Check out
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          global-json-file: global.json
+          # The newest 10.0 SDK, so the runtime bundled into self-contained builds carries the
+          # latest security patches; global.json still pins the major version.
+          dotnet-version: 10.0.x
 
-      - name: Restore
+      - name: Toolchain versions
+        run: |
+          dotnet --version
+          dotnet --list-runtimes
+
+      - name: Restore (fails on packages with known vulnerabilities)
         run: dotnet restore Aesx.sln
 
       - name: Build (warnings are errors)
@@ -50,6 +60,17 @@ jobs:
       - name: Formatting
         if: runner.os == 'Linux'
         run: dotnet format Aesx.sln --verify-no-changes --no-restore
+
+      - name: Known vulnerabilities in packages, including transitive ones
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet list Aesx.sln package --vulnerable --include-transitive | tee vulnerable.txt
+          if grep -q "has the following vulnerable packages" vulnerable.txt; then
+            echo "::error::vulnerable packages found" >&2
+            exit 1
+          fi
 
       - name: Test
         run: dotnet test Aesx.sln --configuration Release --no-build --logger "console;verbosity=normal"
