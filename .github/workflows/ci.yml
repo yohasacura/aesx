@@ -47,6 +47,10 @@ jobs:
       - name: Build (warnings are errors)
         run: dotnet build Aesx.sln --configuration Release --no-restore
 
+      - name: Formatting
+        if: runner.os == 'Linux'
+        run: dotnet format Aesx.sln --verify-no-changes --no-restore
+
       - name: Test
         run: dotnet test Aesx.sln --configuration Release --no-build --logger "console;verbosity=normal"
 
@@ -70,4 +74,18 @@ jobs:
             echo "a wrong password must fail" >&2
             exit 1
           fi
-          [ ! -e sample.wrong ] && [ ! -e sample.wrong.part ]
+          [ ! -e sample.wrong ] && [ -z "$(ls sample.wrong.*.part 2>/dev/null)" ]
+
+      - name: Attack and misuse scenarios against the published binary
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          FULL_DIR=""
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            sudo mkdir -p /mnt/aesx-full
+            sudo mount -t tmpfs -o size=1m tmpfs /mnt/aesx-full
+            sudo chmod 1777 /mnt/aesx-full
+            FULL_DIR=/mnt/aesx-full
+          fi
+          FULL_DIR="$FULL_DIR" bash tests/scenarios/run.sh out/aesx

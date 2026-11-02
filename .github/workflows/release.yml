@@ -68,6 +68,11 @@ jobs:
           "$BIN" --version | grep -F "aesx ${VERSION%%-*}"
           "$BIN" selftest
 
+      - name: Attack and misuse scenarios against the published binary
+        if: runner.os != 'Windows'
+        shell: bash
+        run: bash tests/scenarios/run.sh out/aesx
+
       - name: Stage files
         shell: bash
         run: |
