@@ -1,0 +1,31 @@
+<Project>
+
+  <!-- Settings shared by every project in the repository. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+    <IsPackable>false</IsPackable>
+
+    <!-- Culture data and satellite assemblies are not needed; dropping them keeps the binary small and fully self-contained. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <!-- Product metadata. The release workflow overrides Version from the git tag (-p:Version=X.Y.Z). -->
+  <PropertyGroup>
+    <Version>1.0.0</Version>
+    <Product>aesx</Product>
+    <Authors>yohasacura</Authors>
+    <Copyright>Copyright (c) 2026 yohasacura</Copyright>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/yohasacura/aesx</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+
+</Project>

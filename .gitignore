@@ -1,0 +1,18 @@
+# Build output
+bin/
+obj/
+dist/
+out/
+TestResults/
+
+# IDE and OS noise
+.vs/
+.idea/
+*.user
+*.suo
+.DS_Store
+Thumbs.db
+
+# Never commit encrypted test material or half-written outputs
+*.aesx
+*.part

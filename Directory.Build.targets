@@ -1,0 +1,13 @@
+<Project>
+
+  <!--
+    Evaluated after every project file, so it overrides per-project settings.
+    `dotnet publish` sets _IsPublishing; the published output should be the executable and
+    nothing else, so no project produces symbol files then.
+  -->
+  <PropertyGroup Condition="'$(_IsPublishing)' == 'true'">
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+
+</Project>

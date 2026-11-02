@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>aesx</AssemblyName>
+    <RootNamespace>Aesx.Cli</RootNamespace>
+    <Description>aesx: offline file encryption with AES-256-GCM, no dependencies.</Description>
+    <RollForward>LatestMajor</RollForward>
+  </PropertyGroup>
+
+  <!-- `dotnet publish -r <rid>` produces one self-contained, trimmed executable. -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <PublishTrimmed>true</PublishTrimmed>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Aesx.Core\Aesx.Core.csproj" />
+  </ItemGroup>
+
+</Project>

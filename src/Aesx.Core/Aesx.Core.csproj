@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Aesx</RootNamespace>
+    <Description>The AESX file format: chunked AES-256-GCM with PBKDF2 key derivation, built on the .NET base class library alone.</Description>
+    <!-- XML docs for IDE consumers of the library; not wanted next to a published executable. -->
+    <GenerateDocumentationFile Condition="'$(_IsPublishing)' != 'true'">true</GenerateDocumentationFile>
+    <IsTrimmable>true</IsTrimmable>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Aesx.Tests" />
+  </ItemGroup>
+
+</Project>
