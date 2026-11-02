@@ -1,0 +1,31 @@
+---
+layout: default
+---
+{%- assign current = page.url -%}
+<div class="container docs">
+  <details class="docs-nav" id="docs-nav" open>
+    <summary>Documentation</summary>
+    <nav aria-label="Documentation">
+      {%- for section in site.data.nav %}
+      <p class="docs-nav__section">{{ section.title }}</p>
+      <ul>
+        {%- for item in section.items %}
+        {%- if item.external %}
+        <li><a href="{{ item.url }}">{{ item.title }}<span class="ext" aria-hidden="true">↗</span></a></li>
+        {%- else %}
+        <li><a href="{{ item.url | relative_url }}"{% if item.url == current %} aria-current="page"{% endif %}>{{ item.title }}</a></li>
+        {%- endif %}
+        {%- endfor %}
+      </ul>
+      {%- endfor %}
+    </nav>
+  </details>
+  <article class="docs-main prose" id="content">
+    {{ content }}
+    <p class="docs-edit"><a href="https://github.com/{{ site.repository }}/edit/main/{{ page.path }}">Edit this page on GitHub</a></p>
+  </article>
+  <aside class="docs-toc" aria-label="On this page">
+    <p class="docs-toc__title">On this page</p>
+    <ol id="toc"></ol>
+  </aside>
+</div>

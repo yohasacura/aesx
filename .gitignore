@@ -5,6 +5,11 @@ dist/
 out/
 TestResults/
 
+# Website built locally (docs/BUILDING.md, "Website")
+_site/
+.jekyll-cache/
+.jekyll-metadata
+
 # IDE and OS noise
 .vs/
 .idea/

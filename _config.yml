@@ -1,0 +1,69 @@
+# The website, https://yohasacura.github.io/aesx, built by .github/workflows/pages.yml with
+# GitHub's own Jekyll builder. There is no Gemfile and no custom plugin, only plugins that GitHub
+# Pages ships. Everything site-specific lives under site/; the documentation is rendered straight
+# from docs/*.md and CHANGELOG.md, so the website and the repository cannot drift apart.
+
+title: aesx
+tagline: Free, offline, open-source file encryption
+description: >-
+  Free, offline, open-source file encryption for Windows, macOS and Linux. One password, one file
+  in, one .aesx file out: AES-256-GCM through the operating system's own cryptography, no
+  third-party code, no network, Apache 2.0.
+url: https://yohasacura.github.io
+baseurl: /aesx
+repository: yohasacura/aesx
+lang: en
+timezone: UTC
+
+theme: null                      # the github-pages gem would add Primer otherwise
+layouts_dir: site/_layouts
+includes_dir: site/_includes
+data_dir: site/_data
+
+markdown: kramdown
+kramdown:
+  input: GFM
+  hard_wrap: false
+  syntax_highlighter: rouge
+
+plugins:
+  - jekyll-optional-front-matter   # render Markdown files that have no front matter
+  - jekyll-relative-links          # links to .md files become links to the rendered pages
+  - jekyll-titles-from-headings    # the first heading of a page is its title
+  - jekyll-github-metadata         # site.github.latest_release feeds the download links
+  - jekyll-seo-tag
+  - jekyll-sitemap
+
+optional_front_matter:
+  remove_originals: true
+titles_from_headings:
+  strip_title: false
+
+# Only the documentation and the site sources are published; everything else is build input.
+exclude:
+  - src
+  - tests
+  - out
+  - Aesx.sln
+  - Directory.Build.props
+  - Directory.Build.targets
+  - global.json
+  - README.md
+  - LICENSE
+  - CONTRIBUTING.md        # optional-front-matter skips these two by name; linked to GitHub
+  - CODE_OF_CONDUCT.md
+  - vendor
+
+defaults:
+  - scope: { path: docs }
+    values: { layout: docs }
+  - scope: { path: docs/USAGE.md }
+    values: { permalink: /docs/usage/ }
+  - scope: { path: docs/SECURITY.md }
+    values: { permalink: /docs/security/ }
+  - scope: { path: docs/FORMAT.md }
+    values: { permalink: /docs/format/ }
+  - scope: { path: docs/BUILDING.md }
+    values: { permalink: /docs/building/ }
+  - scope: { path: CHANGELOG.md }
+    values: { layout: docs, permalink: /changelog/ }

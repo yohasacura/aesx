@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="{{ site.lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {%- assign asset_version = site.github.build_revision | default: site.time | date: "%s" | slice: 0, 10 -%}
+  {%- if page.url == "/" %}
+  <title>aesx · {{ site.tagline }}</title>
+  {%- else %}
+  <title>{{ page.title | default: site.title }} · aesx</title>
+  {%- endif %}
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#0b7a75">
+  <link rel="icon" href="{{ '/assets/favicon.svg' | relative_url }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ '/assets/site.css' | relative_url }}?v={{ asset_version }}">
+  {% seo title=false %}
+  <script>
+    // A theme chosen earlier is applied before the first paint, so the page never flashes.
+    try {
+      var t = localStorage.getItem('aesx-theme');
+      if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+    } catch (e) {}
+  </script>
+</head>
+<body class="{% if page.url == '/' %}home{% else %}page{% endif %}">
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="container site-header__inner">
+      <a class="brand" href="{{ '/' | relative_url }}">{% include logo.svg %}<span>aesx</span></a>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+      <nav id="site-nav" class="site-nav" aria-label="Site">
+        <a href="{{ '/docs/' | relative_url }}">Docs</a>
+        <a href="{{ '/docs/security/' | relative_url }}">Security</a>
+        <a href="{{ '/#download' | relative_url }}">Download</a>
+        <a href="https://github.com/{{ site.repository }}">GitHub<span class="ext" aria-hidden="true">↗</span></a>
+        <button class="theme-toggle" type="button" aria-label="Switch colour theme" title="Switch colour theme">
+          <svg class="icon-moon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+          <svg class="icon-sun" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        </button>
+      </nav>
+    </div>
+  </header>
+  <main id="main">
+    {{ content }}
+  </main>
+  <footer class="site-footer">
+    <div class="container">
+      <p>aesx is free software under the <a href="https://github.com/{{ site.repository }}/blob/main/LICENSE">Apache License 2.0</a>. Copyright © 2026 yohasacura. An independent project, not affiliated with AES Crypt.</p>
+      <p>Found a security problem? <a href="https://github.com/{{ site.repository }}/security/advisories/new">Report it privately</a>; public issues are for everything else.</p>
+      <p>This site is static: no cookies, no analytics, no requests to anyone but GitHub for the downloads.{% if site.github.build_revision and site.github.build_revision.size == 40 %} Built from commit <a href="https://github.com/{{ site.repository }}/commit/{{ site.github.build_revision }}"><code>{{ site.github.build_revision | slice: 0, 7 }}</code></a>.{% endif %}</p>
+    </div>
+  </footer>
+  <script src="{{ '/assets/site.js' | relative_url }}?v={{ asset_version }}" defer></script>
+</body>
+</html>

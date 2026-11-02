@@ -2,8 +2,8 @@
 
 ## Prerequisites
 
-The [.NET SDK](https://dotnet.microsoft.com/download) version pinned in [`global.json`](../global.json)
-(10.0.x). Nothing else: no native toolchain, no package manager, no third-party packages at
+The [.NET SDK](https://dotnet.microsoft.com/download) version pinned in
+[`global.json`](https://github.com/yohasacura/aesx/blob/main/global.json) (10.0.x). Nothing else: no native toolchain, no package manager, no third-party packages at
 runtime. The test project pulls xUnit from NuGet; the product does not reference any package.
 
 ## Build and test
@@ -71,15 +71,17 @@ PowerShell with `${PWD}` in place of `$PWD`.
 
 ## Continuous integration
 
-[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs on every push to `main` and every
+[`.github/workflows/ci.yml`](https://github.com/yohasacura/aesx/blob/main/.github/workflows/ci.yml)
+runs on every push to `main` and every
 pull request, and weekly on a schedule, on Linux, Windows and macOS: restore (which fails on a
 package with a known vulnerability), build with warnings as errors and the security analyzers at
 their strictest level, a formatting check, an explicit vulnerability listing including transitive
 packages, the full test suite, a single-file publish for that platform, a smoke test of the
 published binary (version, self-tests, an encrypt/decrypt round trip of random data, and a
 wrong-password check that must fail without leaving files behind), and, on Linux and macOS, the
-scenario script above. [`codeql.yml`](../.github/workflows/codeql.yml) runs GitHub's CodeQL
-analysis with the security-extended queries on the same triggers.
+scenario script above.
+[`codeql.yml`](https://github.com/yohasacura/aesx/blob/main/.github/workflows/codeql.yml) runs
+GitHub's CodeQL analysis with the security-extended queries on the same triggers.
 
 All actions are pinned to commit SHAs, and the repository's Actions settings allow only actions
 authored by GitHub, require the full-SHA pin, give workflows a read-only `GITHUB_TOKEN` unless a
@@ -102,7 +104,8 @@ and only a repository admin can create one, so only an admin can trigger a relea
 ## Releasing
 
 1. Move the `Unreleased` entries in [`CHANGELOG.md`](../CHANGELOG.md) under a new version heading
-   with today's date, and set `<Version>` in [`Directory.Build.props`](../Directory.Build.props).
+   with today's date, and set `<Version>` in
+   [`Directory.Build.props`](https://github.com/yohasacura/aesx/blob/main/Directory.Build.props).
 2. Open a pull request with that change, wait for the checks, and merge it.
 3. As a repository admin, tag the merge commit on `main` and push the tag (the tag rulesets
    refuse tags from anyone else, and refuse moving or deleting a tag afterwards):
@@ -112,7 +115,8 @@ and only a repository admin can create one, so only an admin can trigger a relea
    git push origin v1.2.3
    ```
 
-[`.github/workflows/release.yml`](../.github/workflows/release.yml) then runs the test suite and
+[`.github/workflows/release.yml`](https://github.com/yohasacura/aesx/blob/main/.github/workflows/release.yml)
+then runs the test suite and
 builds the binary on each target platform's own runner (including ARM64 Windows and Linux and
 Intel macOS), ad-hoc signs the macOS binaries, runs the shipped self-tests against each binary,
 packages them as `.zip` (Windows) or `.tar.gz` (others), computes `SHA256SUMS.txt`, and creates
@@ -124,6 +128,21 @@ suffix such as `v1.3.0-rc.1` is published as a pre-release.
 The product follows [Semantic Versioning](https://semver.org). The file format has its own
 version byte (see [FORMAT.md](FORMAT.md)); any change to it is a major release and keeps the
 ability to read the previous format.
+
+## Website
+
+<https://yohasacura.github.io/aesx> is built from this repository by
+[`.github/workflows/pages.yml`](https://github.com/yohasacura/aesx/blob/main/.github/workflows/pages.yml)
+on every push to `main` and after every release, with GitHub's own Jekyll builder and only the
+plugins that GitHub Pages ships: no Gemfile, no custom plugins, no external fonts or scripts, no
+analytics. The pages under `docs/` and `CHANGELOG.md` are rendered exactly as they are in the
+repository, so there is nothing to keep in sync (`CONTRIBUTING.md` and `CODE_OF_CONDUCT.md` are
+linked to GitHub instead: the Pages builder skips files with those names). Links between
+Markdown files are rewritten to the rendered pages; a link to any other repository file must be
+an absolute GitHub URL, or it breaks on the website. The landing
+page, layouts, styles and navigation live under `site/`, and `_config.yml` at the root ties it
+together. A pull request that touches any of this gets a build check, and the download links on
+the landing page are read from the latest GitHub release at build time.
 
 ## Reproducing a release binary
 
