@@ -26,6 +26,7 @@ internal sealed class Options
     public string? Output { get; set; }
     public string? Password { get; set; }
     public int Iterations { get; set; } = AesxFormat.DefaultIterations;
+    public bool IterationsSpecified { get; set; }
     public bool Force { get; set; }
     public bool DeleteInput { get; set; }
     public bool Quiet { get; set; }
@@ -59,21 +60,23 @@ internal static class CommandLine
                     break;
                 case "-o" or "--output":
                     o.Output = Value(args, ref i, a);
+                    if (o.Output.Length == 0) throw new UsageException("the output path must not be empty");
                     break;
                 case "-p" or "--password":
                     o.Password = Value(args, ref i, a);
                     break;
                 case "-i" or "--iterations":
-                {
-                    string v = Value(args, ref i, a);
-                    if (!int.TryParse(v, NumberStyles.None, CultureInfo.InvariantCulture, out int n)
-                        || n < 1 || n > AesxFormat.MaxIterations)
                     {
-                        throw new UsageException($"invalid iteration count '{v}' (allowed: 1..{AesxFormat.MaxIterations})");
+                        string v = Value(args, ref i, a);
+                        if (!int.TryParse(v, NumberStyles.None, CultureInfo.InvariantCulture, out int n)
+                            || n < 1 || n > AesxFormat.MaxIterations)
+                        {
+                            throw new UsageException($"invalid iteration count '{v}' (allowed: 1..{AesxFormat.MaxIterations})");
+                        }
+                        o.Iterations = n;
+                        o.IterationsSpecified = true;
+                        break;
                     }
-                    o.Iterations = n;
-                    break;
-                }
                 case "--":
                     positional.AddRange(args[(i + 1)..]);
                     i = args.Length;
@@ -126,19 +129,20 @@ internal static class CommandLine
               aesx selftest                     run the built-in self-tests
 
             Options:
-              -o, --output <path>      output file (single input only)
+              -o, --output <path>      output file, or an existing directory to write into
               -p, --password <pw>      password on the command line (visible to other users
                                        and kept in shell history; prefer the prompt or stdin)
               -i, --iterations <n>     PBKDF2 iterations when encrypting (default {AesxFormat.DefaultIterations})
               -f, --force              overwrite an existing output file
-                  --delete             delete the input file after success
+                  --delete             delete the input after the output has been written and,
+                                       for encryption, verified
               -q, --quiet              no progress output
               -h, --help               show this help
               -V, --version            show the version
 
             The password is asked for on the terminal without echo. When stdin is not a
             terminal (a pipe or a file), its first line is used as the password.
-            Exit codes: 0 success, 1 failure, 2 usage error.
+            Exit codes: 0 success, 1 failure, 2 usage error, 130 interrupted.
             """);
     }
 }

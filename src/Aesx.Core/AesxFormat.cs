@@ -39,7 +39,8 @@ namespace Aesx;
 /// <para>
 /// All cryptography comes from <see cref="System.Security.Cryptography"/>; the library has no
 /// other dependencies. Structural problems raise <see cref="InvalidDataException"/>; a wrong
-/// password or tampered data raises <see cref="CryptographicException"/>.
+/// password or tampered data raises <see cref="CryptographicException"/>; a cancelled token
+/// raises <see cref="OperationCanceledException"/> between chunks.
 /// </para>
 /// </remarks>
 public static class AesxFormat
@@ -74,8 +75,12 @@ public static class AesxFormat
     /// <summary>Default PBKDF2-HMAC-SHA256 iteration count (the OWASP recommendation for SHA-256).</summary>
     public const int DefaultIterations = 600_000;
 
-    /// <summary>Largest iteration count accepted, as a parameter or in a header, which bounds the cost of a hostile file.</summary>
-    public const int MaxIterations = 100_000_000;
+    /// <summary>
+    /// Largest iteration count accepted, as a parameter or in a header. Sixteen times the default
+    /// is ample headroom, while keeping the work a hostile file can demand before it is rejected
+    /// to a few seconds.
+    /// </summary>
+    public const int MaxIterations = 10_000_000;
 
     /// <summary>Maximum number of chunks in one file (the NIST SP 800-38D invocation limit per key).</summary>
     public const ulong MaxChunks = 1UL << 32;
@@ -96,15 +101,22 @@ public static class AesxFormat
     /// <param name="output">Destination for the AESX file.</param>
     /// <param name="password">Password bytes exactly as the application defines them (the CLI uses UTF-8). Must not be empty.</param>
     /// <param name="iterations">PBKDF2 iteration count, 1..<see cref="MaxIterations"/>.</param>
+    /// <param name="cancellationToken">Checked before the header and before every chunk; cancelling stops the work at a chunk boundary.</param>
     /// <exception cref="ArgumentException">The password is empty.</exception>
     /// <exception cref="ArgumentOutOfRangeException">The iteration count is out of range.</exception>
-    public static void Encrypt(Stream input, Stream output, ReadOnlySpan<byte> password, int iterations = DefaultIterations)
+    /// <exception cref="OperationCanceledException">The token was cancelled.</exception>
+    public static void Encrypt(
+        Stream input,
+        Stream output,
+        ReadOnlySpan<byte> password,
+        int iterations = DefaultIterations,
+        CancellationToken cancellationToken = default)
     {
         Span<byte> salt = stackalloc byte[SaltSize];
         Span<byte> noncePrefix = stackalloc byte[NoncePrefixSize];
         RandomNumberGenerator.Fill(salt);
         RandomNumberGenerator.Fill(noncePrefix);
-        Encrypt(input, output, password, iterations, salt, noncePrefix);
+        Encrypt(input, output, password, iterations, salt, noncePrefix, cancellationToken);
     }
 
     /// <summary>
@@ -118,7 +130,8 @@ public static class AesxFormat
         ReadOnlySpan<byte> password,
         int iterations,
         ReadOnlySpan<byte> salt,
-        ReadOnlySpan<byte> noncePrefix)
+        ReadOnlySpan<byte> noncePrefix,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(output);
@@ -130,6 +143,7 @@ public static class AesxFormat
             throw new ArgumentException($"The salt must be {SaltSize} bytes.", nameof(salt));
         if (noncePrefix.Length != NoncePrefixSize)
             throw new ArgumentException($"The nonce prefix must be {NoncePrefixSize} bytes.", nameof(noncePrefix));
+        cancellationToken.ThrowIfCancellationRequested();
 
         Span<byte> header = stackalloc byte[HeaderSize];
         Magic.CopyTo(header);
@@ -158,6 +172,7 @@ public static class AesxFormat
             ulong index = 0;
             while (true)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 int lenB = ReadFull(input, bufB);
                 bool last = lenB == 0;
                 SetChunk(nonce, aad, index, last);
@@ -188,14 +203,17 @@ public static class AesxFormat
     /// <param name="input">The AESX file; read until it ends.</param>
     /// <param name="output">Destination for the plaintext.</param>
     /// <param name="password">Password bytes, encoded exactly as they were for encryption.</param>
+    /// <param name="cancellationToken">Checked before key derivation and before every chunk.</param>
     /// <exception cref="InvalidDataException">The input is not a complete, well-formed AESX file.</exception>
     /// <exception cref="CryptographicException">The password is wrong or the data has been tampered with.</exception>
-    public static void Decrypt(Stream input, Stream output, ReadOnlySpan<byte> password)
+    /// <exception cref="OperationCanceledException">The token was cancelled.</exception>
+    public static void Decrypt(Stream input, Stream output, ReadOnlySpan<byte> password, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(output);
         if (password.IsEmpty)
             throw new ArgumentException("The password must not be empty.", nameof(password));
+        cancellationToken.ThrowIfCancellationRequested();
 
         Span<byte> header = stackalloc byte[HeaderSize];
         if (ReadFull(input, header) < HeaderSize || !header[..4].SequenceEqual(Magic))
@@ -223,6 +241,7 @@ public static class AesxFormat
             ulong index = 0;
             while (true)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 int lenB = ReadFull(input, bufB);
                 bool last = lenB == 0;
                 if (lenA < TagSize || (!last && lenA != ChunkSize + TagSize))

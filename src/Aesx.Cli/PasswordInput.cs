@@ -9,8 +9,9 @@ namespace Aesx.Cli;
 internal static class PasswordInput
 {
     /// <summary>
-    /// Returns the password as UTF-8 bytes; the caller zeroes them when done.
-    /// Precedence: -p/--password, then piped standard input, then the terminal.
+    /// Returns the password as bytes; the caller zeroes them when done.
+    /// Precedence: -p/--password (UTF-8 of the argument), then piped standard input (the raw
+    /// bytes of its first line), then the terminal (UTF-8 of the characters typed, no echo).
     /// </summary>
     public static byte[] Obtain(Options options, bool confirm)
     {
@@ -21,13 +22,13 @@ internal static class PasswordInput
         }
 
         bool interactive = !Console.IsInputRedirected;
-        byte[] password = Read(interactive ? "Password: " : null);
+        byte[] password = interactive ? ReadFromTerminal("Password: ") : ConsoleSupport.ReadStandardInputLine();
         if (password.Length == 0)
             throw new InvalidOperationException("the password must not be empty");
 
         if (confirm && interactive)
         {
-            byte[] again = Read("Confirm password: ");
+            byte[] again = ReadFromTerminal("Confirm password: ");
             bool same = CryptographicOperations.FixedTimeEquals(password, again);
             CryptographicOperations.ZeroMemory(again);
             if (!same)
@@ -39,20 +40,11 @@ internal static class PasswordInput
         return password;
     }
 
-    /// <summary>With a prompt, reads from the terminal without echo; without one, reads a line of standard input.</summary>
-    private static byte[] Read(string? prompt)
+    private static byte[] ReadFromTerminal(string prompt)
     {
-        char[] chars;
-        if (prompt is null)
-        {
-            chars = ConsoleSupport.ReadLineChars(hidden: false);
-        }
-        else
-        {
-            Console.Error.Write(prompt);
-            chars = ConsoleSupport.ReadLineChars(hidden: true);
-            Console.Error.WriteLine();
-        }
+        Console.Error.Write(prompt);
+        char[] chars = ConsoleSupport.ReadHiddenLine();
+        Console.Error.WriteLine();
         try
         {
             return Encoding.UTF8.GetBytes(chars);
