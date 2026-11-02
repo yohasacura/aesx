@@ -34,13 +34,49 @@ the program and the parts of the .NET runtime it uses. It needs no .NET installa
 machine. Any host can publish for any target; cross-publishing a macOS binary from Windows or
 Linux works, but only a Mac can `codesign` it, which the release workflow does.
 
+## Robustness and attack scenarios
+
+Two layers go beyond the unit tests:
+
+- **Fuzzing.** `FuzzTests` mutates valid files (bit flips, truncation, insertion, deletion,
+  duplication, boundary shifts, hostile header fields, random garbage) and checks that every
+  result is rejected cleanly and quickly, or decrypts to the original when the mutation was a
+  no-op. The suite runs 1 500 rounds; set `AESX_FUZZ_ITERATIONS` for more and `AESX_FUZZ_SEED`
+  to reproduce a run.
+- **Scenarios against the real binary.** `tests/scenarios/run.sh <path-to-aesx>` exercises
+  misuse and hostile conditions from the outside: directories and symbolic links, read-only and
+  unreadable paths, a full filesystem (`FULL_DIR=<dir on a tiny tmpfs>`), SIGINT and SIGTERM in
+  the middle of a write, empty environments, unusual passwords, concurrency. It prints PASS/FAIL
+  per scenario. CI runs it on Linux and macOS after publishing the binary.
+
+To run everything in a disposable Linux container (nothing is installed on the host):
+
+```bash
+# Build, test with a long fuzz run, publish the Linux binary into ./out
+docker run --rm -v "$PWD:/src:ro" -v "$PWD/out:/out" -e AESX_FUZZ_ITERATIONS=30000 \
+  mcr.microsoft.com/dotnet/sdk:10.0 bash -c '
+    cp -r /src /work && cd /work && rm -rf src/*/bin src/*/obj tests/*/bin tests/*/obj &&
+    dotnet test Aesx.sln -c Release &&
+    dotnet publish src/Aesx.Cli/Aesx.Cli.csproj -c Release -r linux-x64 -o /out'
+
+# Attack the published binary as an unprivileged user, with 96 MB of memory, a read-only root
+# filesystem and a 1 MiB "full" disk, on a minimal image without the SDK
+docker run --rm --user 1000:1000 --memory=96m --read-only --tmpfs /tmp:size=1g --tmpfs /full:size=1m \
+  -v "$PWD/out:/out:ro" -v "$PWD/tests/scenarios:/scenarios:ro" -e FULL_DIR=/full -e HOME=/tmp \
+  mcr.microsoft.com/dotnet/runtime-deps:10.0 bash /scenarios/run.sh /out/aesx
+```
+
+On Windows, run these from Git Bash with `MSYS_NO_PATHCONV=1` in front of `docker`, or from
+PowerShell with `${PWD}` in place of `$PWD`.
+
 ## Continuous integration
 
 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs on every push to `main` and every
-pull request, on Linux, Windows and macOS: restore, build with warnings as errors, the full test
-suite, a single-file publish for that platform, and a smoke test of the published binary
-(version, self-tests, an encrypt/decrypt round trip of random data, and a wrong-password check
-that must fail without leaving files behind).
+pull request, on Linux, Windows and macOS: restore, build with warnings as errors and the
+security analyzers at their strictest level, the full test suite, a single-file publish for that
+platform, a smoke test of the published binary (version, self-tests, an encrypt/decrypt round
+trip of random data, and a wrong-password check that must fail without leaving files behind),
+and, on Linux and macOS, the scenario script above.
 
 Dependabot keeps the GitHub Actions versions and the test packages current.
 

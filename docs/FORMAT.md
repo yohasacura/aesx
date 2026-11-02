@@ -18,13 +18,13 @@ There is no padding, no alignment and no trailer. Byte order is given per field.
 | -----: | ---: | ------------ | --------------------------------------------------------------------------- |
 |      0 |    4 | magic        | the ASCII bytes `AESX` (`41 45 53 58`)                                      |
 |      4 |    1 | version      | `01`                                                                        |
-|      5 |    4 | iterations   | PBKDF2 iteration count, unsigned 32-bit little-endian, `1 ≤ n ≤ 100 000 000` |
+|      5 |    4 | iterations   | PBKDF2 iteration count, unsigned 32-bit little-endian, `1 ≤ n ≤ 10 000 000` |
 |      9 |   16 | salt         | random bytes, fresh for every file                                          |
 |     25 |    4 | nonce prefix | random bytes, fresh for every file                                          |
 
 Total: 29 bytes. Readers MUST reject a file whose magic or version differs, and MUST reject an
-iteration count of 0 or above 100 000 000 before deriving a key, so that a hostile header cannot
-force minutes of computation.
+iteration count of 0 or above 10 000 000 before deriving a key, so that a hostile header can cost
+at most a few seconds of computation before it is rejected.
 
 ## Key derivation
 
@@ -97,7 +97,7 @@ A non-final chunk therefore occupies exactly `C + 16` bytes of the file; the fin
 | Plaintext per chunk | 1 048 576 bytes                                   |
 | Chunks per file     | 2^32 (the NIST SP 800-38D invocation limit per key) |
 | Plaintext per file  | 2^52 bytes (4 PiB)                                |
-| Iterations          | 1 … 100 000 000                                   |
+| Iterations          | 1 … 10 000 000                                    |
 | Nonce / tag / key   | 96 / 128 / 256 bits                               |
 
 ## Test vector

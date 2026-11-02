@@ -28,8 +28,11 @@ Done: 1,048,621 bytes in 0.1 s
 - **Completely offline.** No network code, no telemetry, no update checks, no activation. The
   whole product is six small source files; read them.
 - **Any file size, constant memory.** Data is processed in 1 MiB chunks, each authenticated on
-  its own, so a 100 GB disk image needs the same few megabytes of RAM as a text file. Output is
-  written atomically, so a failure never leaves a half-written file behind.
+  its own, so a 100 GB disk image needs the same few megabytes of RAM as a text file.
+- **Hard to misuse.** Never overwrites without `--force`, never leaves a half-written file behind
+  (not on a wrong password, a full disk or Ctrl+C), verifies an encrypted file before `--delete`
+  removes the original, and refuses directories, same-file output and other foot-guns up front.
+  Fuzzed and attacked in CI on every change.
 - **One executable, about 11 MB.** Download, unpack, run. On Windows you can also drop files onto
   `aesx.exe`.
 - **Apache 2.0.** Free for personal and commercial use.
@@ -59,11 +62,12 @@ aesx encrypt <file>... [options]  encrypt file(s) to <file>.aesx
 aesx decrypt <file>... [options]  decrypt file(s) to <file> without .aesx
 aesx selftest                     run the built-in self-tests
 
--o, --output <path>    output file (single input only)
+-o, --output <path>    output file, or an existing directory to write into
 -p, --password <pw>    password on the command line (prefer the prompt or stdin)
 -i, --iterations <n>   PBKDF2 iterations when encrypting (default 600000)
 -f, --force            overwrite an existing output file
-    --delete           delete the input file after success
+    --delete           delete the input after the output is written (and, for
+                       encryption, verified)
 -q, --quiet            no progress output
 ```
 
@@ -76,7 +80,7 @@ printf '%s\n' "$PASSWORD" | aesx encrypt nightly.sql --delete    # from a script
 ```
 
 The password is read from the terminal without echo; when stdin is a pipe, its first line is
-used. Exit codes: 0 success, 1 failure, 2 usage error. Everything else is in
+used. Exit codes: 0 success, 1 failure, 2 usage error, 130 interrupted. Everything else is in
 [docs/USAGE.md](docs/USAGE.md).
 
 ## How it works
@@ -104,7 +108,8 @@ aesx is an independent project with no affiliation to AES Crypt, and it does not
 ```text
 src/Aesx.Core/     the format: encrypt and decrypt streams (one file, no dependencies)
 src/Aesx.Cli/      the aesx command-line tool
-tests/Aesx.Tests/  xUnit suite: format, tamper cases, spec conformance, test vector, CLI end to end
+tests/Aesx.Tests/  xUnit suite: format, tamper cases, fuzzing, spec conformance, test vector, CLI end to end
+tests/scenarios/   attack and misuse scenarios run against the published binary
 docs/              format specification, security, usage, building and releasing
 .github/           CI on Linux, Windows and macOS; releases built from tags
 ```

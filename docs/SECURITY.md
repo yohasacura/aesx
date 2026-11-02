@@ -120,16 +120,48 @@ rather than its goals; aesx keeps the workflow and replaces the format.
   may have swapped them out; full-disk encryption covers that residue.
 - The password confirmation prompt compares in constant time (`FixedTimeEquals`).
 - Hostile files cannot cause unbounded work: the iteration count in the header is capped at
-  100 000 000, chunk sizes are fixed by the format, and no attacker-controlled length field is
-  ever used for allocation.
-- Output is written to a temporary file and renamed into place only after the last chunk has
-  verified, so a wrong password, a corrupted input or a crash never leaves a partial file.
+  10 000 000 (a few seconds of CPU at most), chunk sizes are fixed by the format, and no
+  attacker-controlled length field is ever used for allocation. A 30 000-round mutation fuzzer
+  runs in the isolated test environment and a 1 500-round one in every CI run; every mutated file
+  must be rejected with one of the two documented exception types, within seconds, releasing
+  nothing but whole verified chunks.
+- Output goes to a uniquely named temporary file next to the destination, created exclusively
+  (`O_EXCL`/`CREATE_NEW`, so a planted symbolic link cannot redirect the write), and is renamed
+  into place only after the last chunk has verified. A wrong password, a corrupted input, a full
+  disk, Ctrl+C, a closed console window, SIGTERM or a crash never leaves a partial file, and the
+  interrupted run exits with code 130.
+- `--delete` after encryption first decrypts the new file end to end and only then removes the
+  original, so a silently failing disk cannot cost you the only copy.
+- The input/output same-file check follows symbolic links, and `-o` pointing at a directory
+  writes into it instead of trying to replace it.
+- On Unix, decrypted files are created readable and writable by their owner only (mode 0600).
+- A password piped through standard input is taken as the raw bytes of the first line, without
+  text decoding (the Windows console code page would otherwise alter anything beyond ASCII), so
+  the same bytes are used on every platform. A UTF-8 byte-order mark and the line ending are
+  removed.
 - Randomness comes from `RandomNumberGenerator`, the operating system's CSPRNG.
 - Release binaries are built from tags by GitHub Actions, on the target platform, with the run
   publicly visible, and ship with `SHA256SUMS.txt`. The same binary can be rebuilt locally with
   one `dotnet publish` command ([BUILDING.md](BUILDING.md)).
 - The binaries are not signed with a paid certificate, so Windows SmartScreen and macOS
   Gatekeeper warn on first launch. Building from source avoids the warnings entirely.
+
+## How it is tested
+
+- `tests/Aesx.Tests`: round trips at every chunk boundary (also through non-seekable streams
+  with short reads), nineteen named tampering cases, header layout, hostile iteration counts,
+  cancellation, an independent re-implementation of the specification, a fixed test vector, and
+  the mutation fuzzer described above (`AESX_FUZZ_ITERATIONS` and `AESX_FUZZ_SEED` control it).
+- The same project runs the real executable end to end: wrong passwords, damaged files,
+  directories as input or output, missing output directories, symbolic links at the output,
+  byte-order marks and long non-ASCII passwords, parallel runs, Unix permissions, and the
+  `--delete` verification.
+- `tests/scenarios/run.sh` attacks a published binary from the outside: symlink targets, a
+  read-only directory, an unreadable input, a full filesystem, SIGINT and SIGTERM in the middle
+  of a write, an empty environment with a bogus `HOME`, empty and oversized passwords, and the
+  usual misuse. CI runs it on Linux and macOS; [BUILDING.md](BUILDING.md#robustness-and-attack-scenarios)
+  shows how to run it in a throw-away container with a memory limit, a read-only root filesystem
+  and an unprivileged user.
 
 ## Known limitations
 
@@ -138,3 +170,5 @@ rather than its goals; aesx keeps the workflow and replaces the format.
   file size and names, and no secure-delete feature.
 - `--password` exposes the password to other processes and to shell history; it exists for
   scripts that cannot use a pipe.
+- Decryption does not restore the original file's permissions, owner or timestamps; the format
+  stores no metadata.
