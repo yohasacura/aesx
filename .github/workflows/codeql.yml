@@ -18,6 +18,7 @@ concurrency:
 
 jobs:
   analyze:
+    # Required status check in the ruleset that protects main; rename both together.
     name: Analyze C#
     runs-on: ubuntu-latest
     permissions:

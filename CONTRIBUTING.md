@@ -19,12 +19,21 @@ it that way.
 
 ## Workflow
 
+`main` is protected by repository rulesets with no bypass for anyone, the maintainer included.
+Every change, dependency updates too, arrives through a pull request whose branch is up to date
+with `main` and whose CI jobs on Linux, Windows and macOS and CodeQL analysis have passed, with
+all review threads resolved; it is merged by squash or rebase, so the history stays linear.
+Release tags (`v*`) can be created only by a repository admin and can never be moved or deleted.
+
 1. Open an issue for anything beyond a small fix, so the scope is agreed before the work.
 2. Fork, branch from `main`, make the change with tests.
 3. Add a line under `Unreleased` in [CHANGELOG.md](CHANGELOG.md).
-4. Open a pull request. Commit messages follow the
+4. Open a pull request; the template lists what is checked. Commit messages follow the
    [Conventional Commits](https://www.conventionalcommits.org) style (`feat:`, `fix:`, `docs:`,
    `test:`, `ci:`, `chore:`).
+
+Workflows for pull requests from forks start only after the maintainer approves them, so CI may
+begin a little later on a first contribution.
 
 ## Security issues
 

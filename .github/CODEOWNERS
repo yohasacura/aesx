@@ -1,0 +1,3 @@
+# The maintainer reviews every change. Rulesets on main already require a pull request with
+# green CI; this file makes the review request automatic for contributions from others.
+* @yohasacura
