@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rid: linux-x64
+          - os: windows-latest
+            rid: win-x64
+          - os: macos-latest
+            rid: osx-arm64
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore Aesx.sln
+
+      - name: Build (warnings are errors)
+        run: dotnet build Aesx.sln --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test Aesx.sln --configuration Release --no-build --logger "console;verbosity=normal"
+
+      - name: Publish single-file binary (${{ matrix.rid }})
+        run: dotnet publish src/Aesx.Cli/Aesx.Cli.csproj --configuration Release --runtime ${{ matrix.rid }} --output out
+
+      - name: Smoke-test the published binary
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BIN=out/aesx
+          [ -f "$BIN.exe" ] && BIN="$BIN.exe"
+          ls -la out
+          "$BIN" --version
+          "$BIN" selftest
+          head -c 3000000 /dev/urandom > sample.bin
+          printf 'ci-password\n' | "$BIN" encrypt sample.bin --iterations 1000
+          printf 'ci-password\n' | "$BIN" decrypt sample.bin.aesx --output sample.out
+          cmp sample.bin sample.out
+          if printf 'wrong\n' | "$BIN" decrypt sample.bin.aesx --output sample.wrong; then
+            echo "a wrong password must fail" >&2
+            exit 1
+          fi
+          [ ! -e sample.wrong ] && [ ! -e sample.wrong.part ]

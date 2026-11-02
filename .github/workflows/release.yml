@@ -1,0 +1,148 @@
+# Pushing a tag such as v1.2.3 builds aesx for every supported platform on that platform's
+# own runner, tests it there, packages it, and publishes a GitHub release with checksums.
+name: Release
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+
+permissions:
+  contents: write
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  # No AppleDouble (._*) entries in tarballs created on macOS.
+  COPYFILE_DISABLE: 1
+
+jobs:
+  build:
+    name: ${{ matrix.rid }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { os: windows-latest,   rid: win-x64 }
+          - { os: windows-11-arm,   rid: win-arm64 }
+          - { os: macos-latest,     rid: osx-arm64 }
+          - { os: macos-15-intel,   rid: osx-x64 }
+          - { os: ubuntu-latest,    rid: linux-x64 }
+          - { os: ubuntu-24.04-arm, rid: linux-arm64 }
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Derive version from the tag
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "NAME=aesx-$VERSION-${{ matrix.rid }}" >> "$GITHUB_ENV"
+
+      - name: Test on this platform
+        run: dotnet test Aesx.sln --configuration Release
+
+      - name: Publish single-file binary
+        shell: bash
+        run: dotnet publish src/Aesx.Cli/Aesx.Cli.csproj --configuration Release --runtime ${{ matrix.rid }} --output out "-p:Version=$VERSION"
+
+      - name: Ad-hoc sign (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          codesign --force --sign - out/aesx
+          codesign --verify --verbose out/aesx
+
+      - name: Smoke-test the published binary
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BIN=out/aesx
+          [ -f "$BIN.exe" ] && BIN="$BIN.exe"
+          "$BIN" --version | grep -F "aesx ${VERSION%%-*}"
+          "$BIN" selftest
+
+      - name: Stage files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "stage/$NAME" dist
+          cp LICENSE README.md CHANGELOG.md "stage/$NAME/"
+          if [ -f out/aesx.exe ]; then
+            cp out/aesx.exe "stage/$NAME/"
+          else
+            cp out/aesx "stage/$NAME/"
+            chmod 755 "stage/$NAME/aesx"
+          fi
+
+      - name: Archive (zip)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path "stage/$env:NAME" -DestinationPath "dist/$env:NAME.zip"
+
+      - name: Archive (tar.gz)
+        if: runner.os != 'Windows'
+        run: tar -C stage -czf "dist/$NAME.tar.gz" "$NAME"
+
+      - name: Upload
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.rid }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Download all binaries
+        uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum * | tee SHA256SUMS.txt
+
+      - name: Release notes from CHANGELOG.md
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v v="$VERSION" '
+            index($0, "## [" v "]") == 1 { on = 1; next }
+            /^## \[/ { on = 0 }
+            on { print }
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then printf 'aesx %s\n' "$VERSION" > notes.md; fi
+          {
+            printf '\n---\n\n'
+            printf 'Verify a download against `SHA256SUMS.txt`: `sha256sum -c SHA256SUMS.txt --ignore-missing` '
+            printf '(PowerShell: `Get-FileHash`). All binaries were built from this tag by GitHub Actions; '
+            printf 'the run is linked on this page.\n'
+          } >> notes.md
+          cat notes.md
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          case "$GITHUB_REF_NAME" in
+            *-*) PRERELEASE="--prerelease" ;;
+            *)   PRERELEASE="" ;;
+          esac
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --verify-tag \
+            --title "aesx ${GITHUB_REF_NAME#v}" \
+            --notes-file notes.md \
+            $PRERELEASE
