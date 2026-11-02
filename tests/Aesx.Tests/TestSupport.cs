@@ -2,6 +2,7 @@
 // Copyright (c) 2026 yohasacura
 
 using System.Diagnostics;
+using System.Text;
 
 namespace Aesx.Tests;
 
@@ -32,6 +33,43 @@ internal sealed class TrickleStream(Stream inner, int maxRead) : Stream
     }
 }
 
+/// <summary>Cancels a token source once a given number of bytes has been read through it.</summary>
+internal sealed class CancelAfterStream(Stream inner, long cancelAfterBytes, CancellationTokenSource cancellation) : Stream
+{
+    private long _read;
+
+    public override bool CanRead => true;
+    public override bool CanSeek => false;
+    public override bool CanWrite => false;
+    public override long Length => throw new NotSupportedException();
+    public override long Position
+    {
+        get => throw new NotSupportedException();
+        set => throw new NotSupportedException();
+    }
+
+    public override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
+
+    public override int Read(Span<byte> buffer)
+    {
+        int n = inner.Read(buffer);
+        _read += n;
+        if (_read >= cancelAfterBytes) cancellation.Cancel();
+        return n;
+    }
+
+    public override void Flush() { }
+    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+    public override void SetLength(long value) => throw new NotSupportedException();
+    public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) inner.Dispose();
+        base.Dispose(disposing);
+    }
+}
+
 /// <summary>A scratch directory that disappears with the test.</summary>
 internal sealed class TempDir : IDisposable
 {
@@ -39,7 +77,12 @@ internal sealed class TempDir : IDisposable
 
     public string File(string name) => System.IO.Path.Combine(Path, name);
 
-    public string[] Files() => Directory.GetFiles(Path).Select(System.IO.Path.GetFileName).Order(StringComparer.Ordinal).ToArray()!;
+    /// <summary>Names of all files below the directory, relative, sorted; proves that no temporary files survive.</summary>
+    public string[] Files()
+        => Directory.GetFiles(Path, "*", SearchOption.AllDirectories)
+            .Select(f => System.IO.Path.GetRelativePath(Path, f).Replace('\\', '/'))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
 
     public void Dispose()
     {
@@ -85,15 +128,23 @@ internal static class Cli
     }
 
     /// <summary>Runs aesx with <paramref name="stdin"/> piped in (null closes stdin immediately) and captures everything.</summary>
-    public static async Task<CliResult> RunAsync(string? stdin, params string[] args)
+    public static Task<CliResult> RunAsync(string? stdin, params string[] args) => RunInAsync(null, stdin, args);
+
+    /// <summary>Like <see cref="RunAsync"/>, with the process started in <paramref name="workingDirectory"/> so relative paths can be tested.</summary>
+    public static async Task<CliResult> RunInAsync(string? workingDirectory, string? stdin, params string[] args)
     {
         var psi = new ProcessStartInfo(s_fileName)
         {
+            WorkingDirectory = workingDirectory ?? Environment.CurrentDirectory,
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
+            // Pipe bytes the way modern shells do, instead of the Windows console code page.
+            StandardInputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+            StandardOutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+            StandardErrorEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
         };
         if (s_dllArgument is not null) psi.ArgumentList.Add(s_dllArgument);
         foreach (string a in args) psi.ArgumentList.Add(a);

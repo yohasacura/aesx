@@ -240,6 +240,54 @@ public class AesxFormatTests
         Assert.True(Environment.TickCount64 - started < 5_000, "rejection must not wait for a huge PBKDF2 run");
     }
 
+    [Fact]
+    public void TheIterationCapBoundsTheWorkAHostileFileCanDemand()
+    {
+        // Raising this is a deliberate decision: it is the CPU time an attacker's file can burn
+        // before being rejected, on every machine that opens it.
+        Assert.True(AesxFormat.MaxIterations <= 10_000_000);
+        Assert.True(AesxFormat.MaxIterations >= 10 * AesxFormat.DefaultIterations);
+    }
+
+    [Fact]
+    public void PreCancelledTokenProducesNoOutput()
+    {
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        byte[] ct = Encrypt([1, 2, 3]);
+
+        using var encrypted = new MemoryStream();
+        Assert.Throws<OperationCanceledException>(() => AesxFormat.Encrypt(new MemoryStream([1, 2, 3]), encrypted, Password, Iterations, cancelled.Token));
+        Assert.Equal(0, encrypted.Length);
+
+        using var decrypted = new MemoryStream();
+        Assert.Throws<OperationCanceledException>(() => AesxFormat.Decrypt(new MemoryStream(ct), decrypted, Password, cancelled.Token));
+        Assert.Equal(0, decrypted.Length);
+    }
+
+    [Fact]
+    public void CancellationStopsAtTheNextChunkBoundary()
+    {
+        byte[] plain = RandomNumberGenerator.GetBytes(4 * C + 10);
+        using var cts = new CancellationTokenSource();
+        using var input = new CancelAfterStream(new MemoryStream(plain), cancelAfterBytes: C + 1, cts);
+        using var encrypted = new MemoryStream();
+
+        Assert.Throws<OperationCanceledException>(() => AesxFormat.Encrypt(input, encrypted, Password, Iterations, cts.Token));
+
+        Assert.True(encrypted.Length < Header + 3 * ChunkLen, "work continued long after the cancellation");
+
+        byte[] ct = Encrypt(plain);
+        using var cts2 = new CancellationTokenSource();
+        using var ctInput = new CancelAfterStream(new MemoryStream(ct), cancelAfterBytes: Header + ChunkLen + 1, cts2);
+        using var decrypted = new MemoryStream();
+
+        Assert.Throws<OperationCanceledException>(() => AesxFormat.Decrypt(ctInput, decrypted, Password, cts2.Token));
+
+        Assert.True(decrypted.Length < 3 * C, "work continued long after the cancellation");
+        Assert.Equal(0, decrypted.Length % C); // only whole verified chunks were ever released
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(10)]
