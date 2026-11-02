@@ -43,4 +43,5 @@ Do not report them in public issues or pull requests. See
 ## License
 
 By contributing you agree that your contributions are licensed under the
-[Apache License 2.0](LICENSE), the same license as the project.
+[Apache License 2.0](https://github.com/yohasacura/aesx/blob/main/LICENSE), the same license as
+the project.
