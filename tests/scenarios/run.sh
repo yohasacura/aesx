@@ -210,6 +210,54 @@ expect "auto mode decides by extension" 0 - plain.out.aesx auto.txt -p "$PW" "${
 expect "empty file" 0 - encrypt zero.bin -p "$PW" "${FAST[@]}"
 [ "$(wc -c < zero.bin.aesx | tr -d ' ')" = "45" ] && pass "empty file is 45 bytes" || flunk "size $(wc -c < zero.bin.aesx)"
 
+section "Scripts, invisible characters and hostile names"
+for name in "דוח_2025 סופי.txt" "报告 最终版.txt" "日本語のファイル.txt" "تقرير مالي.txt" "эмодзи 🔐🗂.txt"; do
+    printf 'x' > "$name"
+    expect "file name: $name" 0 - encrypt "$name" -p "$PW" "${FAST[@]}"
+    expect "...decrypts" 0 - decrypt "$name.aesx" -p "$PW" -o "$name.out"
+done
+evil=$(printf 'evil\033]0;owned\007.txt')
+printf 'x' > "$evil"
+run 0 - encrypt "$evil" -p "$PW" "${FAST[@]}"
+if [ "$CODE" = 0 ] && ! printf '%s' "$OUT" | grep -q "$(printf '\033')" && printf '%s' "$OUT" | grep -q 'u{001B}'; then
+    pass "escape sequence in a file name is neutralised in output"
+else
+    flunk "escape sequence in a file name (exit $CODE)"
+fi
+rtl=$(printf 'report\342\200\256txt.exe')
+printf 'x' > "$rtl"
+run 0 - encrypt "$rtl" -p "$PW" "${FAST[@]}"
+if [ "$CODE" = 0 ] && printf '%s' "$OUT" | grep -q 'u{202E}'; then pass "bidi override in a file name is shown as an escape"; else flunk "bidi override (exit $CODE)"; fi
+for pw in "סיסמה סודית" "密码 很长" "🔐🔑 ключ" "pässwörd ñ"; do
+    printf 'y' > "pw-test.txt"
+    expect "stdin password: $pw" 0 "$pw
+" encrypt pw-test.txt -o pw-test.aesx -f "${FAST[@]}"
+    expect "...decrypts with the same -p" 0 - decrypt pw-test.aesx -p "$pw" -o pw-test.out -f
+    AESX_PASSWORD="$pw" expect "...and via AESX_PASSWORD" 0 - decrypt pw-test.aesx -o pw-test.out -f
+done
+expect "invisible character warning" 0 - encrypt a.txt -p "$(printf 'pa\342\200\213ss')" -o invis.aesx "${FAST[@]}"
+has "invisible characters (U+200B)" "$ERR" && pass "warns about U+200B in the password" || flunk "no invisible-character warning: $ERR"
+
+section "Streaming to standard output"
+"$AESX" encrypt plain.bin -p "$PW" -o - "${FAST[@]}" 2>/dev/null > stream.aesx && pass "encrypt to -o - (stdout redirected)" || flunk "encrypt to -o -"
+"$AESX" decrypt stream.aesx -p "$PW" -o - 2>/dev/null | cmp -s plain.bin - && pass "decrypt to -o - through a pipe is byte-exact" || flunk "decrypt to -o -"
+expect "-o - with --delete -> 2" 2 - encrypt a.txt -p "$PW" -o - --delete
+expect "-o - with two inputs -> 2" 2 - encrypt a.txt b.txt -p "$PW" -o -
+expect "-o - wrong password -> 1" 1 - decrypt stream.aesx -p nope -o -
+
+section "Password input oddities"
+head -c 2000000 /dev/zero | tr '\0' 'x' | "$AESX" encrypt a.txt -o overlong.aesx "${FAST[@]}" >/dev/null 2>"$WORK/.err"; code=$?
+[ "$code" = 1 ] && grep -q "longer than 1 MiB" "$WORK/.err" && [ ! -e overlong.aesx ] && pass "2 MB line on stdin refused" || flunk "overlong stdin (exit $code)"
+printf '\377\376p\000w\000\015\000\012\000' | "$AESX" encrypt a.txt -o u16.aesx "${FAST[@]}" >/dev/null 2>&1 && "$AESX" decrypt u16.aesx -p pw -o u16.out >/dev/null 2>&1 && pass "UTF-16 password file understood" || flunk "UTF-16 password file"
+printf 'pa\000ss\n' | "$AESX" encrypt a.txt -o nul.aesx "${FAST[@]}" >/dev/null 2>&1 && ! "$AESX" decrypt nul.aesx -p pass -o nul.out >/dev/null 2>&1 && printf 'pa\000ss\n' | "$AESX" decrypt nul.aesx -o nul.out >/dev/null 2>&1 && pass "NUL byte inside a piped password is kept" || flunk "NUL byte in password"
+if mkfifo input.fifo 2>/dev/null; then
+    ( cat plain.bin > input.fifo & )
+    expect "named pipe as input (with -o)" 0 - encrypt input.fifo -p "$PW" -o fifo.aesx "${FAST[@]}"
+    "$AESX" decrypt fifo.aesx -p "$PW" -o fifo.out >/dev/null 2>&1 && cmp -s plain.bin fifo.out && pass "pipe contents round trip" || flunk "pipe contents differ"
+else
+    skip "mkfifo not available"
+fi
+
 section "Hostile environment"
 env -i HOME=/nonexistent PATH=/usr/bin:/bin "$AESX" --version >/dev/null 2>&1 && pass "runs with empty environment and bogus HOME" || flunk "fails with empty environment"
 env -i "$AESX" selftest >/dev/null 2>&1 && pass "self-tests with empty environment" || flunk "self-tests fail with empty environment"

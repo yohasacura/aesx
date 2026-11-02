@@ -99,9 +99,26 @@ internal sealed class TempDir : IDisposable
     }
 }
 
-internal sealed record CliResult(int ExitCode, string Stdout, string Stderr)
+internal sealed record CliResult(int ExitCode, byte[] StdoutBytes, string Stderr)
 {
+    public string Stdout => Encoding.UTF8.GetString(StdoutBytes);
+
     public override string ToString() => $"exit {ExitCode}\n--- stdout ---\n{Stdout}\n--- stderr ---\n{Stderr}";
+}
+
+/// <summary>Everything that can be varied about one run of the executable.</summary>
+internal sealed class CliRun
+{
+    public string? WorkingDirectory { get; init; }
+
+    /// <summary>Text piped into stdin as UTF-8; null closes stdin at once.</summary>
+    public string? Stdin { get; init; }
+
+    /// <summary>Raw bytes piped into stdin; takes precedence over <see cref="Stdin"/>.</summary>
+    public byte[]? StdinBytes { get; init; }
+
+    /// <summary>Environment variables to set (null value removes one).</summary>
+    public IReadOnlyDictionary<string, string?>? Environment { get; init; }
 }
 
 /// <summary>Runs the real <c>aesx</c> executable that the project reference placed next to the test assembly.</summary>
@@ -128,14 +145,18 @@ internal static class Cli
     }
 
     /// <summary>Runs aesx with <paramref name="stdin"/> piped in (null closes stdin immediately) and captures everything.</summary>
-    public static Task<CliResult> RunAsync(string? stdin, params string[] args) => RunInAsync(null, stdin, args);
+    public static Task<CliResult> RunAsync(string? stdin, params string[] args) => RunWithAsync(new CliRun { Stdin = stdin }, args);
 
     /// <summary>Like <see cref="RunAsync"/>, with the process started in <paramref name="workingDirectory"/> so relative paths can be tested.</summary>
-    public static async Task<CliResult> RunInAsync(string? workingDirectory, string? stdin, params string[] args)
+    public static Task<CliResult> RunInAsync(string? workingDirectory, string? stdin, params string[] args)
+        => RunWithAsync(new CliRun { WorkingDirectory = workingDirectory, Stdin = stdin }, args);
+
+    /// <summary>The general form: every aspect of the run comes from <paramref name="run"/>.</summary>
+    public static async Task<CliResult> RunWithAsync(CliRun run, params string[] args)
     {
         var psi = new ProcessStartInfo(s_fileName)
         {
-            WorkingDirectory = workingDirectory ?? Environment.CurrentDirectory,
+            WorkingDirectory = run.WorkingDirectory ?? Environment.CurrentDirectory,
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -143,17 +164,40 @@ internal static class Cli
             CreateNoWindow = true,
             // Pipe bytes the way modern shells do, instead of the Windows console code page.
             StandardInputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
-            StandardOutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
             StandardErrorEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
         };
+        psi.Environment.Remove(PasswordVariable); // never inherit one from the test host by accident
+        if (run.Environment is not null)
+        {
+            foreach ((string name, string? value) in run.Environment)
+            {
+                if (value is null) psi.Environment.Remove(name);
+                else psi.Environment[name] = value;
+            }
+        }
         if (s_dllArgument is not null) psi.ArgumentList.Add(s_dllArgument);
         foreach (string a in args) psi.ArgumentList.Add(a);
 
         using var process = Process.Start(psi) ?? throw new InvalidOperationException("could not start aesx");
-        Task<string> stdout = process.StandardOutput.ReadToEndAsync();
+        Task<byte[]> stdout = ReadAllAsync(process.StandardOutput.BaseStream);
         Task<string> stderr = process.StandardError.ReadToEndAsync();
-        if (stdin is not null) await process.StandardInput.WriteAsync(stdin).ConfigureAwait(false);
-        process.StandardInput.Close();
+        try
+        {
+            if (run.StdinBytes is not null)
+            {
+                await process.StandardInput.BaseStream.WriteAsync(run.StdinBytes).ConfigureAwait(false);
+            }
+            else if (run.Stdin is not null)
+            {
+                await process.StandardInput.WriteAsync(run.Stdin).ConfigureAwait(false);
+            }
+            process.StandardInput.Close();
+        }
+        catch (IOException)
+        {
+            // The process stopped reading (for instance after refusing an overlong line) and may
+            // already have exited; what it did with the input is what the test checks.
+        }
 
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
         try
@@ -166,5 +210,14 @@ internal static class Cli
             throw new TimeoutException("aesx did not exit within two minutes");
         }
         return new CliResult(process.ExitCode, await stdout.ConfigureAwait(false), await stderr.ConfigureAwait(false));
+    }
+
+    public const string PasswordVariable = "AESX_PASSWORD";
+
+    private static async Task<byte[]> ReadAllAsync(Stream stream)
+    {
+        using var buffer = new MemoryStream();
+        await stream.CopyToAsync(buffer).ConfigureAwait(false);
+        return buffer.ToArray();
     }
 }
