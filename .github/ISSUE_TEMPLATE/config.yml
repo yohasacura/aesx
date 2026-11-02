@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/yohasacura/aesx/security/advisories/new
+    about: Report it privately here. Please do not open a public issue for a security problem.
+  - name: Usage questions
+    url: https://github.com/yohasacura/aesx/blob/main/docs/USAGE.md
+    about: The usage guide covers commands, password sources, scripting and the common errors.

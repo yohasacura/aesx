@@ -168,7 +168,14 @@ rather than its goals; aesx keeps the workflow and replaces the format.
   release with the patched runtime can follow.
 - GitHub Actions are pinned to commit SHAs (with the version in a comment); Dependabot keeps the
   pins current. Workflows run with the minimum permissions they need, and the release workflow
-  uses only GitHub's own actions and CLI.
+  uses only GitHub's own actions and CLI. The repository settings enforce the same: only actions
+  authored by GitHub may run, the full-SHA pin is required, the default `GITHUB_TOKEN` is
+  read-only, and workflows for pull requests from forks wait for the maintainer's approval.
+- The repository itself is locked down with rulesets that nobody can bypass: `main` changes only
+  through pull requests that passed CI on all three platforms and CodeQL, on an up-to-date
+  branch, with a linear history and no force pushes or deletion; release tags are immutable and
+  can be created only by a repository admin. Dependabot alerts and security updates, secret
+  scanning with push protection, and private vulnerability reporting are switched on.
 - CodeQL (GitHub's static analysis, `security-extended` suite) runs on every change and weekly;
   findings appear under the repository's Security tab.
 - Releases are built from tags by GitHub Actions on the target platform, with the run linked from

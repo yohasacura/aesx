@@ -81,16 +81,31 @@ wrong-password check that must fail without leaving files behind), and, on Linux
 scenario script above. [`codeql.yml`](../.github/workflows/codeql.yml) runs GitHub's CodeQL
 analysis with the security-extended queries on the same triggers.
 
-All actions are pinned to commit SHAs. Dependabot keeps those pins, the test packages and the
-.NET SDK version in `global.json` current; merging an SDK update may require installing that SDK
-locally (`dotnet --version` must satisfy `global.json`).
+All actions are pinned to commit SHAs, and the repository's Actions settings allow only actions
+authored by GitHub, require the full-SHA pin, give workflows a read-only `GITHUB_TOKEN` unless a
+workflow asks for more, and hold workflows for pull requests from forks until the maintainer
+approves them. Dependabot keeps the pins, the test packages and the .NET SDK version in
+`global.json` current; merging an SDK update may require installing that SDK locally
+(`dotnet --version` must satisfy `global.json`).
+
+### Repository rules
+
+`main` changes only through pull requests, with no bypass for anyone. A ruleset requires the
+three CI jobs (`Build and test (ubuntu-latest)`, `(windows-latest)`, `(macos-latest)`) and the
+`Analyze C#` CodeQL job to pass on a branch that is up to date with `main`, blocks merging while
+CodeQL reports a high-severity alert, requires review threads to be resolved, allows squash and
+rebase merges only (linear history), and blocks force pushes and deletion. Renaming one of those
+jobs means updating the ruleset in the same change (Settings → Rules → Rulesets), or the pull
+request cannot be merged. Two more rulesets cover `v*` tags: they can never be moved or deleted,
+and only a repository admin can create one, so only an admin can trigger a release.
 
 ## Releasing
 
 1. Move the `Unreleased` entries in [`CHANGELOG.md`](../CHANGELOG.md) under a new version heading
    with today's date, and set `<Version>` in [`Directory.Build.props`](../Directory.Build.props).
-2. Commit, push, and wait for CI to pass.
-3. Tag and push the tag:
+2. Open a pull request with that change, wait for the checks, and merge it.
+3. As a repository admin, tag the merge commit on `main` and push the tag (the tag rulesets
+   refuse tags from anyone else, and refuse moving or deleting a tag afterwards):
 
    ```bash
    git tag -a v1.2.3 -m "aesx 1.2.3"

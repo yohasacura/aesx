@@ -23,7 +23,9 @@ env:
 
 jobs:
   build-and-test:
-    name: ${{ matrix.os }}
+    # The job name is a required status check in the ruleset that protects main; renaming it
+    # means updating the ruleset (Settings → Rules → Rulesets) in the same change.
+    name: Build and test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

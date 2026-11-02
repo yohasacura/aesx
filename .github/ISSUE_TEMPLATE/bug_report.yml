@@ -1,0 +1,44 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Never paste a password, or an encrypted file whose contents are sensitive. If the problem
+        has security impact, report it privately instead:
+        https://github.com/yohasacura/aesx/security/advisories/new
+  - type: input
+    id: version
+    attributes:
+      label: aesx version
+      description: The output of `aesx --version`.
+      placeholder: aesx 1.0.0
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Operating system and architecture
+      placeholder: Windows 11 x64 / macOS 15 Apple Silicon / Ubuntu 24.04 arm64
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command and output
+      description: The exact command (replace the password with `***`) and everything aesx printed, with the exit code.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else
+      description: File size, the filesystem (network share, cloud-synced folder, exFAT), how the password was supplied, whether `aesx selftest` passes.
