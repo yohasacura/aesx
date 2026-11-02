@@ -16,7 +16,7 @@
 
 | Option                  | Effect                                                                                                      |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `-o, --output <path>`   | Write to this path instead of the default name. If the path is an existing directory, the default name is used inside it, which also works with several inputs. |
+| `-o, --output <path>`   | Write to this path instead of the default name. If the path is an existing directory, the default name is used inside it, which also works with several inputs. `-o -` writes to standard output (see [Streaming](#streaming-to-standard-output)). |
 | `-p, --password <pw>`   | Take the password from the command line. Visible to other users in the process list and kept in shell history; prefer the prompt or a pipe. |
 | `-i, --iterations <n>`  | PBKDF2 iterations used when encrypting (default 600000, maximum 10000000). Decryption reads the count from the file. |
 | `-f, --force`           | Overwrite an existing output file.                                                                           |
@@ -28,29 +28,42 @@ start with a dash.
 
 ## Entering the password
 
-**At the terminal.** aesx asks for the password without echoing it, and asks a second time when
-encrypting so that a typo cannot lock you out of your own file.
+The first of these sources that is present is used:
 
-**Through a pipe.** When standard input is not a terminal, the first line of it is the password:
-its raw bytes, with the line ending (`\n` or `\r\n`) and a leading UTF-8 byte-order mark removed,
-and no confirmation prompt:
+1. **`--password <pw>`** on the command line. Convenient for one-off commands, but the password is
+   visible in process listings and shell history for as long as either exists.
+2. **The `AESX_PASSWORD` environment variable.** The usual choice for scripts: it does not appear
+   in the command line or in history. (Other processes of the same user can still read it, and
+   `export` leaves it in the shell session; unset it afterwards.)
+3. **Standard input, when it is not a terminal.** The first line of it is the password: its raw
+   bytes, with the line ending (`\n` or `\r\n`) and a leading UTF-8 byte-order mark removed, and no
+   confirmation prompt. A line longer than 1 MiB is refused, which catches a data file connected
+   to stdin by mistake. A file saved by Notepad as UTF-16 is recognised by its byte-order mark and
+   converted, so it matches the same password typed at a prompt.
 
-```bash
-printf '%s\n' "$AESX_PASSWORD" | aesx encrypt backup.tar
-```
+   ```bash
+   printf '%s\n' "$MY_SECRET" | aesx encrypt backup.tar
+   ```
 
-PowerShell 7: `"$env:AESX_PASSWORD" | aesx encrypt backup.tar`. Avoid `echo` in `cmd.exe`, which
-passes a trailing space before the pipe as part of the password, and note that Windows PowerShell
-5.1 encodes piped text with the console code page, so non-ASCII passwords piped from it will not
-match the same password typed elsewhere.
+   PowerShell 7: `"$env:MY_SECRET" | aesx encrypt backup.tar`. Avoid `echo` in `cmd.exe`, which
+   passes a trailing space before the pipe as part of the password, and note that Windows
+   PowerShell 5.1 encodes piped text with the console code page, so non-ASCII passwords piped from
+   it will not match the same password typed elsewhere.
+4. **The terminal.** aesx asks for the password without echoing it, and asks a second time when
+   encrypting so that a typo cannot lock you out of your own file. Backspace works (and removes a
+   whole emoji, not half of one), Ctrl+U starts over, and keys that produce nothing visible
+   (arrows, function keys, Ctrl combinations) are ignored rather than silently added.
 
-**On the command line** with `--password`. Convenient for one-off scripts, but the password is
-visible in process listings and shell history for as long as either exists.
+**Encoding.** A typed, `--password` or `AESX_PASSWORD` password is used as UTF-8; a piped one is
+used byte for byte. Any characters work, including Hebrew, Arabic, Chinese, Japanese and emoji,
+but the same bytes must arrive on both ends; a password made of ASCII letters, digits and
+punctuation behaves identically on every system, shell and keyboard layout. Spaces are never
+trimmed. If a password contains characters that are invisible or only affect layout (zero-width
+joiners, right-to-left marks, byte-order marks, stray control characters), aesx says so, with
+their code points, because they are part of the password and are easy to lose when retyping it.
 
-**Encoding.** A typed or `--password` password is used as UTF-8; a piped one is used byte for
-byte. Any characters work, but the same bytes must arrive on both ends; a password made of ASCII
-letters, digits and punctuation behaves identically on every system, shell and keyboard layout.
-Spaces are never trimmed.
+**Git Bash / mintty on Windows.** mintty connects programs to a pipe rather than a console, so
+the prompt cannot hide what you type. Run `winpty aesx ...`, or use a pipe or `AESX_PASSWORD`.
 
 ## Output files
 
@@ -76,6 +89,34 @@ aesx encrypt photo1.jpg photo2.jpg notes.md
 
 The password is asked once. Files are processed in order; if one fails, the rest are still
 processed, each failure is reported, and the exit code is 1.
+
+## Streaming to standard output
+
+`-o -` sends the result to standard output instead of a file, so plaintext never has to touch the
+disk, and status lines move to standard error:
+
+```bash
+aesx decrypt notes.md.aesx -o - | less
+aesx decrypt db.sql.aesx -o - | psql mydb
+aesx encrypt big.iso -o - | ssh backup-host 'cat > big.iso.aesx'
+```
+
+One input only. `--delete` is refused with `-o -` (nothing could be verified or kept), and
+encrypting onto a terminal is refused unless you pass `--force`, since binary data on a terminal
+helps nobody. A wrong password or a damaged file still fails before any byte is written.
+
+## Non-Latin scripts and unusual characters
+
+File names and passwords in Hebrew, Arabic, Chinese, Japanese, Cyrillic, emoji, or any mix of them
+are ordinary input and are tested as such. Two things are worth knowing:
+
+- aesx prints file names as they are, with one exception: control characters (which can carry
+  terminal escape sequences) and the Unicode right-to-left override and isolate characters
+  (which can make `report‮txt.exe` look like `reportexe.txt`) are shown as `\u{XXXX}`
+  escapes. The file itself is processed under its real name.
+- Some systems type accented characters as one code point and others as a base letter plus a
+  combining mark; the two are different passwords. Typing the password on the same kind of system
+  that encrypted the file, or sticking to ASCII for passwords that must travel, avoids the issue.
 
 ## Windows: drag and drop
 
@@ -157,5 +198,9 @@ in, one file out.
 | `'...' is a directory; aesx works on files`               | Put the folder in a `.zip` or `.tar` archive first, then encrypt the archive.              |
 | `output path is a directory: ...`                         | A directory with the output's name is in the way; choose another name with `--output`.     |
 | `with several input files, -o/--output must name an existing directory` | One output file cannot hold several inputs.                                  |
+| `output file appeared while working: ...`                 | Something created the output while aesx was running; nothing was overwritten. Rerun with `--force` if that was intended. |
+| `invalid output path '...'`                               | The path contains characters the operating system does not allow in names, or is malformed.  |
+| `refusing to write encrypted data to the terminal`        | `-o -` with standard output still attached to the terminal; redirect it or add `--force`.   |
+| `the first line of standard input is longer than 1 MiB`   | Standard input is connected to a data file, not a password; use `-p` or `AESX_PASSWORD`, or fix the redirection. |
 | `interrupted; the unfinished output file was removed`     | Ctrl+C, a closed window or a termination signal stopped the run; nothing was left behind.  |
 | `AES-GCM is not available on this system`                 | The operating system's cryptography library lacks AES-GCM; aesx needs Windows 10+, macOS 13+, or Linux with OpenSSL. |

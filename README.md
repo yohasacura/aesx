@@ -32,7 +32,7 @@ Done: 1,048,621 bytes in 0.1 s
 - **Hard to misuse.** Never overwrites without `--force`, never leaves a half-written file behind
   (not on a wrong password, a full disk or Ctrl+C), verifies an encrypted file before `--delete`
   removes the original, and refuses directories, same-file output and other foot-guns up front.
-  Fuzzed and attacked in CI on every change.
+  Fuzzed, attacked and scanned (NuGet audit, CodeQL) in CI on every change.
 - **One executable, about 11 MB.** Download, unpack, run. On Windows you can also drop files onto
   `aesx.exe`.
 - **Apache 2.0.** Free for personal and commercial use.
@@ -62,8 +62,8 @@ aesx encrypt <file>... [options]  encrypt file(s) to <file>.aesx
 aesx decrypt <file>... [options]  decrypt file(s) to <file> without .aesx
 aesx selftest                     run the built-in self-tests
 
--o, --output <path>    output file, or an existing directory to write into
--p, --password <pw>    password on the command line (prefer the prompt or stdin)
+-o, --output <path>    output file, an existing directory to write into, or - for stdout
+-p, --password <pw>    password on the command line (prefer the prompt, AESX_PASSWORD or stdin)
 -i, --iterations <n>   PBKDF2 iterations when encrypting (default 600000)
 -f, --force            overwrite an existing output file
     --delete           delete the input after the output is written (and, for
@@ -79,8 +79,9 @@ aesx decrypt vault.aesx --output /tmp/vault.sqlite
 printf '%s\n' "$PASSWORD" | aesx encrypt nightly.sql --delete    # from a script
 ```
 
-The password is read from the terminal without echo; when stdin is a pipe, its first line is
-used. Exit codes: 0 success, 1 failure, 2 usage error, 130 interrupted. Everything else is in
+The password comes from `-p`, the `AESX_PASSWORD` variable, the first line of a piped stdin, or
+an echo-free prompt, in that order. File names and passwords may use any script. Exit codes:
+0 success, 1 failure, 2 usage error, 130 interrupted. Everything else is in
 [docs/USAGE.md](docs/USAGE.md).
 
 ## How it works

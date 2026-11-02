@@ -19,9 +19,13 @@ First release.
   derived by PBKDF2-HMAC-SHA256 (600 000 iterations by default) from a random 128-bit salt per
   file. Reordering, duplication, truncation and header tampering are all detected.
 - Atomic output through a uniquely named, exclusively created temporary file; overwrite
-  protection (`--force`); several inputs per run; `--output` accepting a directory; password
-  entry from an echo-free prompt, from a pipe (raw bytes, byte-order mark and line ending
-  removed), or with `--password`.
+  protection (`--force`, enforced by the final rename itself); several inputs per run;
+  `--output` accepting a directory or `-` for standard output; password entry from an echo-free
+  prompt, the `AESX_PASSWORD` environment variable, a pipe (raw bytes; UTF-8 and UTF-16
+  byte-order marks and the line ending handled; lines over 1 MiB refused), or `--password`.
+- File names and passwords in any script. Control characters and bidirectional overrides in
+  file names are shown as `\u{XXXX}` escapes in output; the prompt warns about invisible
+  characters in a password and deletes whole emoji on Backspace.
 - `--delete`, which after encryption decrypts the new file end to end before removing the
   original.
 - Clean handling of Ctrl+C, a closed console window, SIGTERM and SIGHUP: the unfinished output is
@@ -39,7 +43,10 @@ First release.
 - An xUnit suite covering the format (chunk boundaries, tamper cases, cancellation, a mutation
   fuzzer, an independent re-implementation of the specification, a fixed test vector) and the
   command-line tool end to end, plus `tests/scenarios/run.sh`, which attacks a published binary
-  with symbolic links, permission problems, a full disk, signals and hostile environments.
+  with symbolic links, permission problems, a full disk, signals, hostile names and environments.
+- Supply-chain checks: NuGet vulnerability audit on every restore, CodeQL analysis, GitHub Actions
+  pinned to commit SHAs, weekly scheduled runs, and Dependabot for actions, test packages and the
+  .NET SDK.
 
 [Unreleased]: https://github.com/yohasacura/aesx/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/yohasacura/aesx/releases/tag/v1.0.0

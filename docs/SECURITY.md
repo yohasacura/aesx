@@ -138,13 +138,41 @@ rather than its goals; aesx keeps the workflow and replaces the format.
 - A password piped through standard input is taken as the raw bytes of the first line, without
   text decoding (the Windows console code page would otherwise alter anything beyond ASCII), so
   the same bytes are used on every platform. A UTF-8 byte-order mark and the line ending are
-  removed.
+  removed, a UTF-16 byte-order mark is honoured, and a line over 1 MiB is refused instead of being
+  read into memory. The prompt warns about invisible characters in a password and erases a whole
+  surrogate pair on Backspace, so no half-character can end up in the key.
+- File names are printed with control characters and bidirectional-override characters escaped,
+  so a name taken from an untrusted archive cannot inject terminal escape sequences or disguise
+  its extension in aesx's own output.
+- Without `--force` the final rename refuses to replace a file, so an output that appears between
+  the existence check and the rename is not overwritten (no time-of-check/time-of-use window).
+- File streams are unbuffered: plaintext passes through the format's own 1 MiB buffers, which are
+  wiped, and through no additional copies in stream buffers.
 - Randomness comes from `RandomNumberGenerator`, the operating system's CSPRNG.
 - Release binaries are built from tags by GitHub Actions, on the target platform, with the run
   publicly visible, and ship with `SHA256SUMS.txt`. The same binary can be rebuilt locally with
   one `dotnet publish` command ([BUILDING.md](BUILDING.md)).
 - The binaries are not signed with a paid certificate, so Windows SmartScreen and macOS
   Gatekeeper warn on first launch. Building from source avoids the warnings entirely.
+
+## Supply chain
+
+- The product references no packages: the shipped binary is this repository plus the .NET
+  runtime. The test project's packages (xUnit and the test SDK) never enter the binary.
+- Every restore runs NuGet's vulnerability audit against the GitHub Advisory Database for direct
+  and transitive packages at every severity, and a hit fails the build. CI repeats the check
+  explicitly and also runs on a weekly schedule, so a new advisory surfaces without a commit.
+- The .NET runtime embedded in the self-contained binaries is whatever the SDK ships at build
+  time; CI always installs the newest 10.0 SDK, the release notes record the exact SDK and
+  runtime versions, and Dependabot opens a pull request when a new SDK patch appears so that a
+  release with the patched runtime can follow.
+- GitHub Actions are pinned to commit SHAs (with the version in a comment); Dependabot keeps the
+  pins current. Workflows run with the minimum permissions they need, and the release workflow
+  uses only GitHub's own actions and CLI.
+- CodeQL (GitHub's static analysis, `security-extended` suite) runs on every change and weekly;
+  findings appear under the repository's Security tab.
+- Releases are built from tags by GitHub Actions on the target platform, with the run linked from
+  the release page, and ship with `SHA256SUMS.txt`.
 
 ## How it is tested
 
@@ -153,9 +181,13 @@ rather than its goals; aesx keeps the workflow and replaces the format.
   cancellation, an independent re-implementation of the specification, a fixed test vector, and
   the mutation fuzzer described above (`AESX_FUZZ_ITERATIONS` and `AESX_FUZZ_SEED` control it).
 - The same project runs the real executable end to end: wrong passwords, damaged files,
-  directories as input or output, missing output directories, symbolic links at the output,
-  byte-order marks and long non-ASCII passwords, parallel runs, Unix permissions, and the
-  `--delete` verification.
+  directories as input or output, missing output directories, symbolic links at the input and the
+  output (absolute and relative), byte-order marks, UTF-16 password files, overlong and
+  NUL-containing input, long non-ASCII passwords, parallel runs, Unix permissions, streaming to
+  standard output, every password source and their precedence, and the `--delete` verification.
+- Unicode: file names and passwords in Hebrew, Arabic, Chinese, Japanese and emoji, decomposed
+  characters and zero-width characters round-trip; a right-to-left override or a terminal escape
+  sequence inside a file name is shown escaped and never reaches the terminal raw.
 - `tests/scenarios/run.sh` attacks a published binary from the outside: symlink targets, a
   read-only directory, an unreadable input, a full filesystem, SIGINT and SIGTERM in the middle
   of a write, an empty environment with a bogus `HOME`, empty and oversized passwords, and the

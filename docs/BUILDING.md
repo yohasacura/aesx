@@ -72,13 +72,18 @@ PowerShell with `${PWD}` in place of `$PWD`.
 ## Continuous integration
 
 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs on every push to `main` and every
-pull request, on Linux, Windows and macOS: restore, build with warnings as errors and the
-security analyzers at their strictest level, the full test suite, a single-file publish for that
-platform, a smoke test of the published binary (version, self-tests, an encrypt/decrypt round
-trip of random data, and a wrong-password check that must fail without leaving files behind),
-and, on Linux and macOS, the scenario script above.
+pull request, and weekly on a schedule, on Linux, Windows and macOS: restore (which fails on a
+package with a known vulnerability), build with warnings as errors and the security analyzers at
+their strictest level, a formatting check, an explicit vulnerability listing including transitive
+packages, the full test suite, a single-file publish for that platform, a smoke test of the
+published binary (version, self-tests, an encrypt/decrypt round trip of random data, and a
+wrong-password check that must fail without leaving files behind), and, on Linux and macOS, the
+scenario script above. [`codeql.yml`](../.github/workflows/codeql.yml) runs GitHub's CodeQL
+analysis with the security-extended queries on the same triggers.
 
-Dependabot keeps the GitHub Actions versions and the test packages current.
+All actions are pinned to commit SHAs. Dependabot keeps those pins, the test packages and the
+.NET SDK version in `global.json` current; merging an SDK update may require installing that SDK
+locally (`dotnet --version` must satisfy `global.json`).
 
 ## Releasing
 
