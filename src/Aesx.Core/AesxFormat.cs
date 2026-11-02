@@ -299,6 +299,8 @@ public static class AesxFormat
         {
             int n = stream.Read(buffer[total..]);
             if (n <= 0) break;
+            if (n > buffer.Length - total)
+                throw new IOException("the input stream reported more bytes than were requested");
             total += n;
         }
         return total;

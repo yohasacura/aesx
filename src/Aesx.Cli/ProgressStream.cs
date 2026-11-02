@@ -10,23 +10,34 @@ namespace Aesx.Cli;
 /// multi-gigabyte job is visibly alive instead of looking hung. Only used when standard error
 /// is a terminal and the file is large enough for the wait to be noticeable.
 /// </summary>
-internal sealed class ProgressStream(FileStream inner) : Stream
+internal sealed class ProgressStream(Stream inner, long total) : Stream
 {
     private const long MinimumSize = 64L << 20;
     private static readonly TimeSpan Interval = TimeSpan.FromMilliseconds(250);
 
-    private readonly long _total = inner.Length;
     private long _done;
     private long _lastReport = Stopwatch.GetTimestamp();
     private bool _shown;
 
-    public static Stream WrapIfWorthwhile(FileStream inner, bool quiet)
-        => quiet || Console.IsErrorRedirected || inner.Length < MinimumSize ? inner : new ProgressStream(inner);
+    public static Stream WrapIfWorthwhile(Stream inner, bool quiet)
+    {
+        if (quiet || Console.IsErrorRedirected) return inner;
+        long length;
+        try
+        {
+            length = inner.Length;
+        }
+        catch (Exception ex) when (ex is IOException or NotSupportedException)
+        {
+            return inner; // a pipe or a device: no known size, no percentage
+        }
+        return length < MinimumSize ? inner : new ProgressStream(inner, length);
+    }
 
     public override bool CanRead => true;
     public override bool CanSeek => false;
     public override bool CanWrite => false;
-    public override long Length => _total;
+    public override long Length => total;
     public override long Position
     {
         get => _done;
@@ -52,8 +63,8 @@ internal sealed class ProgressStream(FileStream inner) : Stream
         _done += n;
         if (Stopwatch.GetElapsedTime(_lastReport) < Interval) return;
         _lastReport = Stopwatch.GetTimestamp();
-        int percent = _total == 0 ? 100 : (int)Math.Min(100, _done * 100 / _total);
-        Console.Error.Write($"\r  {percent,3}%  {_done >> 20:N0} / {_total >> 20:N0} MiB");
+        int percent = total <= 0 ? 100 : (int)Math.Min(100, _done * 100 / total);
+        Console.Error.Write($"\r  {percent,3}%  {_done >> 20:N0} / {total >> 20:N0} MiB");
         _shown = true;
     }
 

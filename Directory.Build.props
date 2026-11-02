@@ -16,6 +16,11 @@
     <!-- Culture data and satellite assemblies are not needed; dropping them keeps the binary small and fully self-contained. -->
     <InvariantGlobalization>true</InvariantGlobalization>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+
+    <!-- A referenced package with a known vulnerability (GitHub Advisory Database, via NuGet) fails the build. -->
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>low</NuGetAuditLevel>
   </PropertyGroup>
 
   <!-- Product metadata. The release workflow overrides Version from the git tag (-p:Version=X.Y.Z). -->

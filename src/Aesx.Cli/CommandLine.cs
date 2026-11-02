@@ -129,7 +129,8 @@ internal static class CommandLine
               aesx selftest                     run the built-in self-tests
 
             Options:
-              -o, --output <path>      output file, or an existing directory to write into
+              -o, --output <path>      output file, an existing directory to write into, or "-"
+                                       for standard output (one input only)
               -p, --password <pw>      password on the command line (visible to other users
                                        and kept in shell history; prefer the prompt or stdin)
               -i, --iterations <n>     PBKDF2 iterations when encrypting (default {AesxFormat.DefaultIterations})
@@ -140,8 +141,9 @@ internal static class CommandLine
               -h, --help               show this help
               -V, --version            show the version
 
-            The password is asked for on the terminal without echo. When stdin is not a
-            terminal (a pipe or a file), its first line is used as the password.
+            Password sources, first one found wins: -p, the {PasswordInput.EnvironmentVariable} environment
+            variable, the first line of stdin when it is not a terminal (a pipe or a file),
+            otherwise a prompt on the terminal without echo.
             Exit codes: 0 success, 1 failure, 2 usage error, 130 interrupted.
             """);
     }

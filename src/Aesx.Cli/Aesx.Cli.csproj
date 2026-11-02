@@ -22,4 +22,8 @@
     <ProjectReference Include="..\Aesx.Core\Aesx.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Aesx.Tests" />
+  </ItemGroup>
+
 </Project>

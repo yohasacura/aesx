@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Security.Cryptography;
+using System.Text;
 
 namespace Aesx.Cli;
 
@@ -13,11 +14,15 @@ internal static class Program
     public const int ExitUsage = 2;
     public const int ExitInterrupted = 130;
 
+    /// <summary>The -o value that means "write to standard output".</summary>
+    public const string StandardOutput = "-";
+
     /// <summary>Version of this build, from the assembly version (set through &lt;Version&gt; or -p:Version).</summary>
     public static string Version => (typeof(Program).Assembly.GetName().Version ?? new Version(0, 0, 0)).ToString(3);
 
     private static int Main(string[] args)
     {
+        UseUtf8ForRedirectedOutput();
         int code;
         try
         {
@@ -69,8 +74,12 @@ internal static class Program
         }
         if (!AesxFormat.IsSupported)
             throw new PlatformNotSupportedException("AES-GCM is not available on this system");
-        if (o.Output is not null && o.Inputs.Count > 1 && !Directory.Exists(o.Output))
+
+        bool toStandardOutput = o.Output == StandardOutput;
+        if (o.Inputs.Count > 1 && o.Output is not null && (toStandardOutput || !Directory.Exists(o.Output)))
             throw new UsageException("with several input files, -o/--output must name an existing directory");
+        if (toStandardOutput && o.DeleteInput)
+            throw new UsageException("--delete cannot be combined with -o - (the result cannot be verified or kept)");
 
         var jobs = o.Inputs.ConvertAll(file => (File: file, Encrypt: o.Command switch
         {
@@ -80,13 +89,21 @@ internal static class Program
         }));
 
         bool anyEncrypt = jobs.Exists(j => j.Encrypt);
+        if (toStandardOutput && anyEncrypt && !Console.IsOutputRedirected && !o.Force)
+            throw new UsageException("refusing to write encrypted data to the terminal; redirect standard output or use --force");
         if (anyEncrypt && o.Iterations < 100_000)
             Console.Error.WriteLine($"warning: {o.Iterations} PBKDF2 iterations is low (default: {AesxFormat.DefaultIterations})");
         if (!anyEncrypt && o.IterationsSpecified)
             Console.Error.WriteLine("warning: --iterations only applies when encrypting; ignored (the count is stored in the file)");
 
-        bool interactive = o.Password is null && !Console.IsInputRedirected;
+        bool interactive = o.Password is null
+            && string.IsNullOrEmpty(Environment.GetEnvironmentVariable(PasswordInput.EnvironmentVariable))
+            && !Console.IsInputRedirected;
         byte[] password = PasswordInput.Obtain(o, confirm: anyEncrypt);
+
+        // Status lines go to standard output, unless that is where the data goes.
+        TextWriter status = toStandardOutput || o.Quiet ? TextWriter.Null : Console.Out;
+        if (toStandardOutput && !o.Quiet) status = Console.Error;
 
         // From here on an interrupt (Ctrl+C, closed window, SIGTERM) is turned into a
         // cancellation so the file in progress is cleaned up before exiting.
@@ -99,50 +116,105 @@ internal static class Program
             {
                 try
                 {
-                    ProcessFile(file, encrypt, o, password, interrupts.Token);
+                    ProcessFile(file, encrypt, o, password, status, interrupts.Token);
                 }
                 catch (Exception ex) when (jobs.Count > 1 && ex is not OperationCanceledException)
                 {
                     failures++;
-                    Console.Error.WriteLine($"error: {file}: {ex.Message}");
+                    Console.Error.WriteLine($"error: {TextSafety.Display(file)}: {ex.Message}");
                 }
             }
         }
         finally
         {
             interrupts.Armed = false;
+            interrupts.MarkFinished();
             CryptographicOperations.ZeroMemory(password);
         }
 
-        if (anyEncrypt && failures == 0 && interactive && !o.Quiet)
-            Console.WriteLine("Keep the password safe: an encrypted file cannot be recovered without it.");
+        if (anyEncrypt && failures == 0 && interactive)
+            status.WriteLine("Keep the password safe: an encrypted file cannot be recovered without it.");
         return failures == 0 ? ExitSuccess : ExitFailure;
     }
 
-    private static void ProcessFile(string input, bool encrypt, Options o, byte[] password, CancellationToken cancellationToken)
+    private static void ProcessFile(string input, bool encrypt, Options o, byte[] password, TextWriter status, CancellationToken cancellationToken)
     {
-        if (Directory.Exists(input))
-            throw new InvalidOperationException($"'{input}' is a directory; aesx works on files (put a folder in a .zip or .tar archive first)");
-        if (!File.Exists(input))
-            throw new FileNotFoundException($"input file not found: {input}");
+        string shownInput = TextSafety.Display(input);
+        string fullInput = FullPathOrFail(input, "input");
+        if (Directory.Exists(fullInput))
+            throw new InvalidOperationException($"'{shownInput}' is a directory; aesx works on files (put a folder in a .zip or .tar archive first)");
+        if (!File.Exists(fullInput))
+            throw new FileNotFoundException($"input file not found: {shownInput}");
         if (encrypt && o.Command == Command.Encrypt && input.EndsWith(AesxFormat.FileExtension, StringComparison.OrdinalIgnoreCase))
-            Console.Error.WriteLine($"warning: {input} already has the {AesxFormat.FileExtension} extension and will be encrypted a second time");
+            Console.Error.WriteLine($"warning: {shownInput} already has the {AesxFormat.FileExtension} extension and will be encrypted a second time");
+
+        if (o.Output == StandardOutput)
+        {
+            status.WriteLine($"{(encrypt ? "Encrypting" : "Decrypting")} {shownInput} -> standard output");
+            long started = Stopwatch.GetTimestamp();
+            using (FileStream fin = OpenForReading(fullInput))
+            using (Stream stdout = Console.OpenStandardOutput())
+            using (Stream source = ProgressStream.WrapIfWorthwhile(fin, o.Quiet))
+            {
+                if (encrypt) AesxFormat.Encrypt(source, stdout, password, o.Iterations, cancellationToken);
+                else AesxFormat.Decrypt(source, stdout, password, cancellationToken);
+                stdout.Flush();
+            }
+            status.WriteLine($"Done in {Stopwatch.GetElapsedTime(started).TotalSeconds:F1} s");
+            return;
+        }
 
         string output = OutputPathFor(input, encrypt, o.Output);
-        if (Directory.Exists(output))
-            throw new InvalidOperationException($"output path is a directory: {output}");
-        if (SameFile(input, output))
+        string shownOutput = TextSafety.Display(output);
+        string fullOutput = FullPathOrFail(output, "output");
+        if (Directory.Exists(fullOutput))
+            throw new InvalidOperationException($"output path is a directory: {shownOutput}");
+        if (SameFile(fullInput, fullOutput))
             throw new InvalidOperationException("input and output are the same file");
-        if (File.Exists(output) && !o.Force)
-            throw new InvalidOperationException($"output file already exists: {output} (use -f to overwrite)");
+        if (File.Exists(fullOutput) && !o.Force)
+            throw new InvalidOperationException($"output file already exists: {shownOutput} (use -f to overwrite)");
 
-        if (!o.Quiet)
-            Console.WriteLine($"{(encrypt ? "Encrypting" : "Decrypting")} {input} -> {output}");
+        status.WriteLine($"{(encrypt ? "Encrypting" : "Decrypting")} {shownInput} -> {shownOutput}");
+        WriteThroughTemporaryFile(fullInput, fullOutput, encrypt, o, password, cancellationToken, out double seconds);
 
-        // Write to a uniquely named temporary file created exclusively (so a planted symlink
-        // cannot redirect the write), then rename it into place. A wrong password, a damaged
-        // input, a full disk, an interrupt or a crash therefore never leaves a partial output.
-        string temp = TemporaryPathNextTo(output);
+        bool verified = false;
+        if (o.DeleteInput)
+        {
+            if (encrypt)
+            {
+                // The original is about to disappear: make sure what replaces it really decrypts.
+                try
+                {
+                    using FileStream check = OpenForReading(fullOutput);
+                    AesxFormat.Decrypt(check, Stream.Null, password, cancellationToken);
+                }
+                catch (Exception ex) when (ex is CryptographicException or InvalidDataException or IOException)
+                {
+                    throw new IOException($"{shownOutput} was written but failed verification ({ex.Message}); {shownInput} was kept", ex);
+                }
+                verified = true;
+            }
+            try
+            {
+                File.Delete(fullInput);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                throw new IOException($"{shownOutput} was written, but the input could not be deleted: {ex.Message}", ex);
+            }
+        }
+
+        status.WriteLine($"Done: {new FileInfo(fullOutput).Length:N0} bytes in {seconds:F1} s{(verified ? ", verified" : "")}{(o.DeleteInput ? ", input deleted" : "")}");
+    }
+
+    /// <summary>
+    /// Writes to a uniquely named temporary file created exclusively (so a planted symbolic link
+    /// cannot redirect the write), then renames it into place. A wrong password, a damaged
+    /// input, a full disk, an interrupt or a crash therefore never leaves a partial output.
+    /// </summary>
+    private static void WriteThroughTemporaryFile(string input, string output, bool encrypt, Options o, byte[] password, CancellationToken cancellationToken, out double seconds)
+    {
+        string temp = $"{output}.{Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(4))}.part";
         long started = Stopwatch.GetTimestamp();
         try
         {
@@ -154,46 +226,24 @@ internal static class Program
                 else AesxFormat.Decrypt(source, fout, password, cancellationToken);
                 fout.Flush(flushToDisk: true);
             }
-            File.Move(temp, output, overwrite: true);
+
+            // Without --force the rename itself refuses to replace a file, so one that appeared
+            // while we were working is as safe as one that was there from the start.
+            try
+            {
+                File.Move(temp, output, overwrite: o.Force);
+            }
+            catch (IOException) when (!o.Force && File.Exists(output))
+            {
+                throw new InvalidOperationException($"output file appeared while working: {TextSafety.Display(output)} (use -f to overwrite)");
+            }
         }
         catch
         {
             TryDelete(temp);
             throw;
         }
-
-        bool verified = false;
-        if (o.DeleteInput)
-        {
-            if (encrypt)
-            {
-                // The original is about to disappear: make sure what replaces it really decrypts.
-                try
-                {
-                    using FileStream check = OpenForReading(output);
-                    AesxFormat.Decrypt(check, Stream.Null, password, cancellationToken);
-                }
-                catch (Exception ex) when (ex is CryptographicException or InvalidDataException or IOException)
-                {
-                    throw new IOException($"{output} was written but failed verification ({ex.Message}); {input} was kept", ex);
-                }
-                verified = true;
-            }
-            try
-            {
-                File.Delete(input);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                throw new IOException($"{output} was written, but the input could not be deleted: {ex.Message}", ex);
-            }
-        }
-
-        if (!o.Quiet)
-        {
-            double seconds = Stopwatch.GetElapsedTime(started).TotalSeconds;
-            Console.WriteLine($"Done: {new FileInfo(output).Length:N0} bytes in {seconds:F1} s{(verified ? ", verified" : "")}{(o.DeleteInput ? ", input deleted" : "")}");
-        }
+        seconds = Stopwatch.GetElapsedTime(started).TotalSeconds;
     }
 
     /// <summary>The default name next to the input, or the requested path; a requested directory receives the default name inside it.</summary>
@@ -210,7 +260,29 @@ internal static class Program
         if (encrypt) return input + ext;
         if (input.Length > ext.Length && input.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
             return input[..^ext.Length];
-        throw new UsageException($"cannot derive an output name for '{input}' (no {ext} extension); use -o <file>");
+        throw new UsageException($"cannot derive an output name for '{TextSafety.Display(input)}' (no {ext} extension); use -o <file>");
+    }
+
+    private static string FullPathOrFail(string path, string role)
+    {
+        string full;
+        try
+        {
+            full = Path.GetFullPath(path);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException or IOException)
+        {
+            throw new InvalidOperationException($"invalid {role} path '{TextSafety.Display(path)}': {ex.Message}", ex);
+        }
+
+        // Windows forbids a handful of characters in names; the file system would only say so
+        // after the work is done, with a message that does not name the culprit.
+        if (OperatingSystem.IsWindows()
+            && (Path.GetFileName(full).IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || full.IndexOfAny(Path.GetInvalidPathChars()) >= 0))
+        {
+            throw new InvalidOperationException($"invalid {role} path '{TextSafety.Display(path)}': Windows does not allow the characters < > : \" | ? * or control characters in file names");
+        }
+        return full;
     }
 
     /// <summary>True when both names reach the same existing file, following symbolic links.</summary>
@@ -221,26 +293,21 @@ internal static class Program
         return string.Equals(FinalPath(input), FinalPath(output), comparison);
     }
 
-    private static string FinalPath(string path)
+    private static string FinalPath(string fullPath)
     {
-        // Resolve from the absolute path: a relative link target is interpreted relative to the
-        // link's directory, which is only known once the link's own path is absolute.
-        string full = Path.GetFullPath(path);
         try
         {
-            return File.ResolveLinkTarget(full, returnFinalTarget: true)?.FullName ?? full;
+            return File.ResolveLinkTarget(fullPath, returnFinalTarget: true)?.FullName ?? fullPath;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return full;
+            return fullPath;
         }
     }
 
-    private static string TemporaryPathNextTo(string output)
-        => $"{output}.{Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(4))}.part";
-
+    /// <summary>Unbuffered: the format reads whole 1 MiB chunks, so an extra copy of plaintext in a stream buffer would only linger.</summary>
     private static FileStream OpenForReading(string path)
-        => new(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.SequentialScan);
+        => new(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 0, FileOptions.SequentialScan);
 
     /// <summary>Creates a brand-new file (never follows an existing path or link); decrypted output is readable by its owner only on Unix.</summary>
     private static FileStream CreateExclusively(string path, bool ownerOnly)
@@ -250,7 +317,7 @@ internal static class Program
             Mode = FileMode.CreateNew,
             Access = FileAccess.Write,
             Share = FileShare.None,
-            BufferSize = 1 << 16,
+            BufferSize = 0,
         };
         if (ownerOnly && !OperatingSystem.IsWindows())
             options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
@@ -269,5 +336,13 @@ internal static class Program
         catch (UnauthorizedAccessException)
         {
         }
+    }
+
+    /// <summary>Logs and pipes get UTF-8 (the Unix default); on Windows the console code page would turn non-Latin file names into question marks. A live console is left alone.</summary>
+    private static void UseUtf8ForRedirectedOutput()
+    {
+        var utf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+        if (Console.IsOutputRedirected) Console.OutputEncoding = utf8;
+        if (Console.IsErrorRedirected && !Console.IsOutputRedirected) Console.OutputEncoding = utf8;
     }
 }
