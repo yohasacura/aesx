@@ -1,0 +1,15 @@
+---
+layout: default
+title: Page not found
+permalink: /404.html
+---
+<section class="container notfound">
+  <p class="eyebrow">Error 404</p>
+  <h1>Nothing at this address.</h1>
+  <p class="lead">The page may have moved when the documentation was reorganised, or the link was mistyped.</p>
+  <div class="actions">
+    <a class="button" href="{{ '/' | relative_url }}">Home</a>
+    <a class="button button--ghost" href="{{ '/docs/' | relative_url }}">Documentation</a>
+    <a class="button button--ghost" href="https://github.com/{{ site.repository }}">Source on GitHub</a>
+  </div>
+</section>

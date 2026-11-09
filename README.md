@@ -7,6 +7,8 @@ One password, one file in, one `.aesx` file out: the AES Crypt workflow, without
 [![Latest release](https://img.shields.io/github/v/release/yohasacura/aesx?display_name=tag&sort=semver)](https://github.com/yohasacura/aesx/releases/latest)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
+Website and documentation: **<https://yohasacura.github.io/aesx>**
+
 ```text
 $ aesx tax-return-2025.pdf
 Password:
@@ -112,7 +114,8 @@ src/Aesx.Cli/      the aesx command-line tool
 tests/Aesx.Tests/  xUnit suite: format, tamper cases, fuzzing, spec conformance, test vector, CLI end to end
 tests/scenarios/   attack and misuse scenarios run against the published binary
 docs/              format specification, security, usage, building and releasing
-.github/           CI on Linux, Windows and macOS; releases built from tags
+site/              the website: landing page, layouts and styles (docs/ is rendered as it is)
+.github/           CI on Linux, Windows and macOS; releases built from tags; the website deploy
 ```
 
 ## Contributing and security

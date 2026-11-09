@@ -1,0 +1,16 @@
+# Sidebar of the documentation pages. URLs are site-relative; external ones open GitHub.
+- title: Guides
+  items:
+    - { title: Overview, url: /docs/ }
+    - { title: Usage, url: /docs/usage/ }
+    - { title: Security, url: /docs/security/ }
+    - { title: File format, url: /docs/format/ }
+    - { title: Building and releasing, url: /docs/building/ }
+- title: Project
+  items:
+    - { title: Changelog, url: /changelog/ }
+    - { title: Releases, url: https://github.com/yohasacura/aesx/releases, external: true }
+    - { title: Contributing, url: https://github.com/yohasacura/aesx/blob/main/CONTRIBUTING.md, external: true }
+    - { title: Code of conduct, url: https://github.com/yohasacura/aesx/blob/main/CODE_OF_CONDUCT.md, external: true }
+    - { title: Source on GitHub, url: https://github.com/yohasacura/aesx, external: true }
+    - { title: Report a vulnerability, url: https://github.com/yohasacura/aesx/security/advisories/new, external: true }
