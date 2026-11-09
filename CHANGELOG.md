@@ -7,6 +7,26 @@ documented in [docs/FORMAT.md](docs/FORMAT.md).
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-11-09
+
+A maintenance release. The program, its options and the file format are unchanged, and files are
+interchangeable between 1.0.0 and 1.0.1.
+
+### Added
+
+- The website, <https://yohasacura.github.io/aesx>: a landing page whose download links follow
+  the latest release, and the documentation and this changelog rendered from the repository.
+- Issue and pull request templates and a code of conduct.
+
+### Changed
+
+- `global.json` pins .NET SDK 10.0.403 (was 10.0.100), so building from source needs that SDK or
+  a later 10.0 one.
+- `main` and the release tags are protected by repository rulesets that nobody can bypass, and
+  only GitHub-authored actions pinned to full commit SHAs may run; the security and building
+  guides describe both.
+- CI and the release workflow use `actions/setup-dotnet` 6.1.0 and CodeQL Action 4.39.3.
+
 ## [1.0.0] - 2026-11-02
 
 First release.
@@ -48,5 +68,6 @@ First release.
   pinned to commit SHAs, weekly scheduled runs, and Dependabot for actions, test packages and the
   .NET SDK.
 
-[Unreleased]: https://github.com/yohasacura/aesx/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/yohasacura/aesx/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/yohasacura/aesx/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/yohasacura/aesx/releases/tag/v1.0.0
