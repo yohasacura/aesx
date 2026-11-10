@@ -142,6 +142,22 @@ public class CliTests
     }
 
     [Fact]
+    public async Task AFileNamedLikeACommandOrASwitchIsStillAFile()
+    {
+        using var dir = new TempDir();
+        foreach (string name in new[] { "Embedding", "verify", "info", "register" })
+        {
+            await File.WriteAllTextAsync(dir.File(name), name);
+
+            // Given alone and by its bare name, as somebody sitting in that folder would type it.
+            CliResult run = await Cli.RunInAsync(dir.Path, Pw + "\n", name);
+
+            Assert.True(run.ExitCode == 0, $"{name}: {run}");
+            Assert.True(File.Exists(dir.File(name + ".aesx")), name);
+        }
+    }
+
+    [Fact]
     public async Task DeletesTheInputOnRequest()
     {
         using var dir = new TempDir();

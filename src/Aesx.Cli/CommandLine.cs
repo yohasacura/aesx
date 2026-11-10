@@ -57,8 +57,10 @@ internal static class CommandLine
     {
         var o = new Options();
 
-        // The one argument Windows adds when it starts the program behind a menu entry.
-        if (OperatingSystem.IsWindows() && args is [var only] && only.TrimStart('-', '/').Equals("Embedding", StringComparison.OrdinalIgnoreCase))
+        // The one argument Windows adds when it starts the program behind a menu entry: the
+        // switch itself and nothing else, so that a file called Embedding stays a file.
+        if (OperatingSystem.IsWindows() && args is [['-' or '/', .. var name] only]
+            && name.Equals("Embedding", StringComparison.OrdinalIgnoreCase) && !File.Exists(only))
         {
             o.Command = Command.Explorer;
             return o;

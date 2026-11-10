@@ -65,6 +65,10 @@ The file format is unchanged: every 1.x release reads what every other one write
   implementation of the chunk cryptography. The bytes on disk, the exceptions and the test vector
   are as before.
 - `--delete` is refused for a folder; it removes files only.
+- A name ending in `.folder.aesx` now means an encrypted folder. A plain file that happened to
+  be called `something.folder` and was encrypted with an earlier version is no folder archive, and
+  `aesx decrypt` says so instead of writing it: rename the `.aesx` file, or take its bytes with
+  `-o -`.
 - Some messages are reworded: an interrupted run reports "the unfinished output was removed", a
   directory given to `decrypt` is "a directory; only files can be decrypted", and the error for
   several inputs with a single output file speaks of "inputs".
