@@ -76,6 +76,12 @@ jobs:
         shell: bash
         run: bash tests/scenarios/run.sh out/aesx
 
+      - name: Finder integration, registered, used and removed again (macOS)
+        if: runner.os == 'macOS'
+        timeout-minutes: 15
+        shell: bash
+        run: AESX_REGISTER_FOR_REAL=1 bash tests/scenarios/finder.sh out/aesx
+
       - name: Stage files
         shell: bash
         run: |
