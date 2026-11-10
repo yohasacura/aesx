@@ -124,6 +124,22 @@ Output, 88 bytes:
 `AesxFormatTests.MatchesAnIndependentImplementationOfTheSpecification` checks a multi-chunk
 file against a from-scratch transcription of this document.
 
+A second reader exists outside the project's own language and cryptography library:
+[`tests/interop/aesx-decrypt.mjs`](https://github.com/yohasacura/aesx/blob/main/tests/interop/aesx-decrypt.mjs)
+implements the decryption procedure above in about a hundred lines of JavaScript, with nothing
+but Node.js and its built-in `crypto` module. CI runs it against this vector and against files
+the build under test has just written. It is also the shortest route to your data should aesx
+itself ever be unavailable: `AESX_PASSWORD=... node aesx-decrypt.mjs file.aesx file`.
+
+## What a file holds
+
+The format carries bytes and says nothing about what they are; there is no field for a name, a
+type or a time. The aesx tool adds one convention on top, by file name alone: a file called
+`<name>.folder.aesx` holds a POSIX (pax) tar archive with a single top-level directory, which
+`aesx decrypt` unpacks again. Nothing in the header or in the chunks marks such a file. An
+implementation that ignores the convention is still correct: it decrypts the file and gets the
+tar archive.
+
 ## Relationship to the AES Crypt `.aes` format
 
 None. aesx does not read or write `.aes` files; see

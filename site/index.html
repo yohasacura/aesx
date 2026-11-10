@@ -13,7 +13,7 @@ permalink: /
     <div class="hero__copy">
       <p class="eyebrow">Apache 2.0 · Windows · macOS · Linux</p>
       <h1>Free, offline file encryption.</h1>
-      <p class="lead">One password, one file in, one <code>.aesx</code> file out. AES-256-GCM through your operating system's own cryptography: no third-party code, no network, no licence key.</p>
+      <p class="lead">One password, one file or folder in, one <code>.aesx</code> file out. AES-256-GCM through your operating system's own cryptography: no third-party code, no network, no licence key.</p>
       <div class="actions">
         <a class="button" href="#download">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M6 9l6 6 6-6M4 21h16"/></svg>
@@ -21,7 +21,7 @@ permalink: /
         </a>
         <a class="button button--ghost" href="{{ '/docs/' | relative_url }}">Read the docs</a>
       </div>
-      <p class="hero__meta">Open source on <a href="{{ repo_url }}">GitHub</a>. Every release is built in public by GitHub Actions and ships with <code>SHA256SUMS.txt</code>.</p>
+      <p class="hero__meta">Open source on <a href="{{ repo_url }}">GitHub</a>. Every release is built in public by GitHub Actions and ships with checksums and a signed record of where it was built.</p>
     </div>
     <div class="terminal" role="img" aria-label="Terminal session: aesx encrypts tax-return.pdf after asking for the password twice, then decrypts it again">
       <div class="terminal__bar"><span></span><span></span><span></span><em>aesx</em></div>
@@ -65,7 +65,7 @@ Decrypting tax-return.pdf.aesx -&gt; tax-return.pdf
       <div class="card">
         <div class="card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 2l20 20M8.5 16.4a5 5 0 0 1 7 0M5 12.6a10 10 0 0 1 4.3-2.4M12 20h.01M16.9 10.9A10 10 0 0 1 19 12.6M1.5 8.8a15 15 0 0 1 5.2-3.1M10.7 5.1A15 15 0 0 1 22.5 8.8"/></svg></div>
         <h3>Completely offline</h3>
-        <p>No network code, no telemetry, no update checks, no activation. The whole product is six small source files, and you can read all of them.</p>
+        <p>No network code, no telemetry, no update checks, no activation. The whole product is eleven source files, a few thousand lines, and you can read all of them.</p>
       </div>
       <div class="card">
         <div class="card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l10 5-10 5L2 7l10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
@@ -75,12 +75,22 @@ Decrypting tax-return.pdf.aesx -&gt; tax-return.pdf
       <div class="card">
         <div class="card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg></div>
         <h3>Hard to misuse</h3>
-        <p>Never overwrites without <code>--force</code>, never leaves a half-written file behind, verifies an encrypted file before <code>--delete</code> removes the original, and refuses directories and same-file output up front.</p>
+        <p>Never overwrites without <code>--force</code>, never leaves a half-written file or half-unpacked folder behind, verifies an encrypted file before <code>--delete</code> removes the original, and refuses same-file output up front.</p>
       </div>
       <div class="card">
         <div class="card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6M10 3v6l-5.5 10a1 1 0 0 0 .9 1.5h13.2a1 1 0 0 0 .9-1.5L14 9V3"/><path d="M7.5 15h9"/></svg></div>
         <h3>Tested like it matters</h3>
-        <p>A mutation fuzzer, an independent re-implementation of the specification, attack scenarios against the real binary, CodeQL and a dependency audit run on every change, on Linux, Windows and macOS.</p>
+        <p>A mutation fuzzer, a second reader for the format in another language, attack scenarios against the real binary, CodeQL and a dependency audit run on every change, on Linux, Windows and macOS.</p>
+      </div>
+      <div class="card">
+        <div class="card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
+        <h3>Files, folders and pipes</h3>
+        <p>A folder becomes one encrypted file and comes back as the folder it was, with its names and structure hidden inside. Data can also arrive on standard input and leave on standard output, so a database dump never touches the disk in the clear.</p>
+      </div>
+      <div class="card">
+        <div class="card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4l7 16 2-7 7-2z"/></svg></div>
+        <h3>In the right-click menu</h3>
+        <p>On Windows, <code>aesx register</code> adds <em>Encrypt with aesx</em> and <em>Decrypt with aesx</em> to Explorer for your account. Select any number of files and folders; the password is asked once, in a small window.</p>
       </div>
     </div>
   </div>
@@ -125,14 +135,14 @@ Decrypting tax-return.pdf.aesx -&gt; tax-return.pdf
     </div>
 
     <h3>Verify, then run</h3>
-    <p>Each archive holds one executable plus <code>LICENSE</code>, <code>README.md</code> and <code>CHANGELOG.md</code>. Check it against <code>SHA256SUMS.txt</code> from the same release before unpacking:</p>
+    <p>Each archive holds one executable plus <code>LICENSE</code>, <code>README.md</code> and <code>CHANGELOG.md</code>. Check it against <code>SHA256SUMS.txt</code> from the same release before unpacking; from 1.1.0 on, <a href="{{ '/docs/usage/#verifying-a-download' | relative_url }}"><code>gh attestation verify</code></a> also shows that the file was built by this repository's release workflow.</p>
     <div class="two-col">
       <pre class="code"><code><span class="c"># Linux and macOS</span>
 sha256sum -c SHA256SUMS.txt --ignore-missing</code></pre>
       <pre class="code"><code><span class="c"># Windows PowerShell: compare with the line in SHA256SUMS.txt</span>
 Get-FileHash .\aesx-{{ version | default: "1.0.0" }}-win-x64.zip -Algorithm SHA256</code></pre>
     </div>
-    <p>The binaries are not signed with a paid certificate, so Windows SmartScreen and macOS Gatekeeper warn once; <a href="{{ '/docs/usage/#first-run-warnings' | relative_url }}">two clicks, or one <code>xattr</code> command</a>, get past it. Or skip downloads entirely and <a href="{{ '/docs/building/' | relative_url }}">build the identical executable yourself</a> with one command and the .NET SDK:</p>
+    <p>The binaries are not signed with a paid certificate, so Windows SmartScreen and macOS Gatekeeper warn once; <a href="{{ '/docs/usage/#first-run-warnings' | relative_url }}">two clicks, or one <code>xattr</code> command</a>, get past it. Or skip downloads entirely and <a href="{{ '/docs/building/' | relative_url }}">build the executable yourself</a> with one command and the .NET SDK:</p>
     <pre class="code"><code>dotnet publish src/Aesx.Cli/Aesx.Cli.csproj --configuration Release --runtime win-x64 --output out</code></pre>
   </div>
 </section>
@@ -140,11 +150,15 @@ Get-FileHash .\aesx-{{ version | default: "1.0.0" }}-win-x64.zip -Algorithm SHA2
 <section class="section" id="usage">
   <div class="container">
     <h2>Usage</h2>
-    <p class="intro">Drop files onto <code>aesx.exe</code>, or use the terminal. Files ending in <code>.aesx</code> are decrypted; everything else is encrypted.</p>
+    <p class="intro">Use the terminal, or on Windows the right-click menu or a drop onto <code>aesx.exe</code>. Names ending in <code>.aesx</code> are decrypted; everything else, folders included, is encrypted.</p>
     <div class="two-col">
-      <pre class="code"><code>aesx &lt;file&gt;...                    encrypt; .aesx files are decrypted instead
-aesx encrypt &lt;file&gt;... [options]  encrypt file(s) to &lt;file&gt;.aesx
-aesx decrypt &lt;file&gt;... [options]  decrypt file(s) to &lt;file&gt; without .aesx
+      <pre class="code"><code>aesx &lt;path&gt;...                    encrypt; .aesx names are decrypted instead
+aesx encrypt &lt;path&gt;... [options]  files to &lt;file&gt;.aesx, folders to
+                                  &lt;folder&gt;.folder.aesx
+aesx decrypt &lt;file&gt;... [options]  back to the original file or folder
+aesx verify &lt;file&gt;...             check that files decrypt, write nothing
+aesx info &lt;file&gt;...               what the header says, no password
+aesx register | unregister        Windows: the Explorer menu entries
 aesx selftest                     run the built-in self-tests
 
 -o, --output &lt;path&gt;    output file, an existing directory, or - for stdout
@@ -164,11 +178,16 @@ aesx decrypt backup.tar.aesx
 <span class="c"># several files, one password</span>
 aesx photo1.jpg photo2.jpg notes.md
 
+<span class="c"># a folder, and back</span>
+aesx encrypt photos
+aesx decrypt photos.folder.aesx
+
 <span class="c"># from a script; original deleted once verified</span>
 printf '%s\n' "$PASSWORD" | aesx encrypt nightly.sql --delete
 
-<span class="c"># stream the plaintext, nothing written to disk</span>
-aesx decrypt notes.md.aesx -o - | less</code></pre>
+<span class="c"># as a filter: nothing in the clear on disk</span>
+aesx decrypt notes.md.aesx -o - | less
+pg_dump mydb | aesx encrypt - -o mydb.sql.aesx</code></pre>
     </div>
     <p>The password comes from <code>-p</code>, the <code>AESX_PASSWORD</code> variable, the first line of a piped stdin, or an echo-free prompt, in that order. File names and passwords may use any script. Exit codes: 0 success, 1 failure, 2 usage error, 130 interrupted. <a href="{{ '/docs/usage/' | relative_url }}">Everything else is in the usage guide.</a></p>
   </div>
@@ -199,17 +218,43 @@ chunk_i = AES-256-GCM(key, nonce = nonce_prefix || i, aad = header || i || is_la
       </div>
       <div>
         <h3>Nothing home-made</h3>
-        <p>AES-GCM, PBKDF2, HMAC-SHA256 and the random number generator are the operating system's. aesx contains no cryptographic code of its own, and the format is small enough to re-implement from the specification in an afternoon.</p>
+        <p>AES-GCM, PBKDF2, HMAC-SHA256 and the random number generator are the operating system's. aesx contains no cryptographic code of its own, and the format is small enough to re-implement from the specification in an afternoon: the repository holds a second reader in a hundred lines of JavaScript, so your files never depend on this one program.</p>
       </div>
     </div>
     <p>The complete specification with a test vector is on the <a href="{{ '/docs/format/' | relative_url }}">file format</a> page; the threat model and the reasoning behind each choice are under <a href="{{ '/docs/security/' | relative_url }}">Security</a>.</p>
   </div>
 </section>
 
+<section class="section" id="alternatives">
+  <div class="container">
+    <h2>When another tool fits better</h2>
+    <p class="intro">aesx does one thing: it turns a password and a file or folder into one authenticated, encrypted file, and back. Some jobs call for something else.</p>
+    <div class="cards cards--plain">
+      <div>
+        <h3>Encrypting to a person, not a password</h3>
+        <p><a href="https://age-encryption.org">age</a> encrypts to public keys, so nothing secret has to be shared beforehand. aesx has no public-key mode.</p>
+      </div>
+      <div>
+        <h3>Compression and archives</h3>
+        <p><a href="https://www.7-zip.org">7-Zip</a> compresses, and its archives open in many other programs. aesx does not compress, and a folder it encrypts is unpacked by aesx or by <code>tar</code>.</p>
+      </div>
+      <div>
+        <h3>A whole disk, or files you work in</h3>
+        <p>BitLocker, FileVault, LUKS and VeraCrypt encrypt a disk or a volume that stays mounted while you work. aesx is for files you store or send.</p>
+      </div>
+      <div>
+        <h3>Signatures and OpenPGP</h3>
+        <p><a href="https://gnupg.org">GnuPG</a> signs, manages keys and speaks the format mail programs and package managers expect. aesx only encrypts.</p>
+      </div>
+    </div>
+    <p>What aesx protects, what it does not, and its known limitations are spelled out under <a href="{{ '/docs/security/' | relative_url }}">Security</a>.</p>
+  </div>
+</section>
+
 <section class="section" id="aes-crypt">
   <div class="container">
     <h2>Coming from AES Crypt?</h2>
-    <p class="intro">aesx is an independent project with no affiliation to AES Crypt, and it does not read or write <code>.aes</code> files. To migrate, decrypt with the AES Crypt you already have and encrypt with aesx. The day-to-day workflow is the same: one password, one file in, one file out.</p>
+    <p class="intro">aesx is an independent project with no affiliation to AES Crypt, and it does not read or write <code>.aes</code> files. To migrate, decrypt with the AES Crypt you already have and encrypt with aesx. The day-to-day workflow is the same: one password, one file in, one file out, from the terminal or, after <code>aesx register</code>, from the right-click menu.</p>
     <div class="actions">
       <a class="button" href="#download">Download</a>
       <a class="button button--ghost" href="{{ '/docs/usage/#migrating-from-aes-crypt' | relative_url }}">Migration notes</a>

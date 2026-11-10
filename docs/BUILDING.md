@@ -14,6 +14,16 @@ dotnet test  Aesx.sln --configuration Release   # unit, conformance and end-to-e
 dotnet run --project src/Aesx.Cli -- selftest   # the self-tests that ship inside the binary
 ```
 
+On Windows the test suite also exercises the Explorer integration, and a password window
+flickers on the screen while it does. Those tests use a scratch registry key and a file
+extension of their own; on a machine where `aesx register` has been run for real they stand
+aside, so they can never point your own menu entries at a test build.
+
+The Windows-specific code (the registry entries, the class that receives a selection from
+Explorer, the password window) calls the operating system through marshalling code that the
+compiler generates at build time, which is why `Aesx.Cli` sets `AllowUnsafeBlocks`; nothing
+written in the repository is marked `unsafe`, and no build step needs a native toolchain.
+
 ## Produce the single-file executable
 
 ```bash
@@ -46,8 +56,18 @@ Two layers go beyond the unit tests:
 - **Scenarios against the real binary.** `tests/scenarios/run.sh <path-to-aesx>` exercises
   misuse and hostile conditions from the outside: directories and symbolic links, read-only and
   unreadable paths, a full filesystem (`FULL_DIR=<dir on a tiny tmpfs>`), SIGINT and SIGTERM in
-  the middle of a write, empty environments, unusual passwords, concurrency. It prints PASS/FAIL
-  per scenario. CI runs it on Linux and macOS after publishing the binary.
+  the middle of a write, empty environments, unusual passwords, concurrency, data on standard
+  input, and folders (links, a named pipe that must not be opened, permissions on the way back,
+  archives made by the system `tar` that must be refused). It prints PASS/FAIL per scenario. CI
+  runs it on Linux and macOS after publishing the binary.
+- **A second implementation.** `tests/interop/aesx-decrypt.mjs` reads AESX files with Node.js
+  and its built-in `crypto` module, no packages. With Node.js installed:
+
+  ```bash
+  AESX_PASSWORD=... node tests/interop/aesx-decrypt.mjs some-file.aesx some-file
+  ```
+
+  CI runs it against the test vector and against what the build under test writes.
 
 To run everything in a disposable Linux container (nothing is installed on the host):
 
@@ -77,9 +97,11 @@ pull request, and weekly on a schedule, on Linux, Windows and macOS: restore (wh
 package with a known vulnerability), build with warnings as errors and the security analyzers at
 their strictest level, a formatting check, an explicit vulnerability listing including transitive
 packages, the full test suite, a single-file publish for that platform, a smoke test of the
-published binary (version, self-tests, an encrypt/decrypt round trip of random data, and a
-wrong-password check that must fail without leaving files behind), and, on Linux and macOS, the
-scenario script above.
+published binary (version, self-tests, an encrypt/decrypt round trip of random data, a
+wrong-password check that must fail without leaving files behind, `verify` and `info`, data
+through standard input, and a folder there and back), the independent reader in Node.js against
+that binary's output, on Windows a round trip of `aesx register` and `aesx unregister`, and, on
+Linux and macOS, the scenario script above.
 [`codeql.yml`](https://github.com/yohasacura/aesx/blob/main/.github/workflows/codeql.yml) runs
 GitHub's CodeQL analysis with the security-extended queries on the same triggers.
 
@@ -119,9 +141,11 @@ and only a repository admin can create one, so only an admin can trigger a relea
 then runs the test suite and
 builds the binary on each target platform's own runner (including ARM64 Windows and Linux and
 Intel macOS), ad-hoc signs the macOS binaries, runs the shipped self-tests against each binary,
-packages them as `.zip` (Windows) or `.tar.gz` (others), computes `SHA256SUMS.txt`, and creates
-the GitHub release with the notes taken from the matching CHANGELOG section. A tag with a
-suffix such as `v1.3.0-rc.1` is published as a pre-release.
+packages them as `.zip` (Windows) or `.tar.gz` (others), computes `SHA256SUMS.txt`, attests the
+build provenance of every file (`actions/attest-build-provenance`), and creates the GitHub
+release with the notes taken from the matching CHANGELOG section. A tag with a suffix such as
+`v1.3.0-rc.1` is published as a pre-release. Only the publishing job has write permissions
+(to create the release and to sign and store the attestation); the build jobs can only read.
 
 ## Versioning
 
@@ -152,3 +176,14 @@ single-file bundle also contains the .NET runtime from Microsoft's runtime packs
 an ad-hoc signature, so byte-identical bundles across machines are not guaranteed; the
 authoritative artefacts are the ones attached to the release, and the workflow run that produced
 them is linked from the release page.
+
+What can be checked instead is where a release file came from. From 1.1.0 on, each one has a
+provenance attestation, signed with the release workflow run's own identity and recorded in a
+public transparency log:
+
+```bash
+gh attestation verify aesx-1.1.0-linux-x64.tar.gz --repo yohasacura/aesx
+```
+
+It names the repository, the workflow file, the commit and the run, so a file that was not
+built by this repository's release workflow from the tagged commit does not verify.

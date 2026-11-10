@@ -282,10 +282,13 @@ public class WindowsShellTests
         // The class entry that 'aesx register' writes, pointing at the build under test, for the
         // length of this test.
         using var registered = new ScratchClassRegistration(Cli.StartInfo(new CliRun()).FileName);
-        if (Shell.Invoke([file], ShellRegistration.EncryptVerb) != 0)
+        int verdict = Shell.Invoke([file], ShellRegistration.EncryptVerb);
+        if (verdict != 0)
         {
             // Where the registry of the test process is private to it (inside a packaged
             // application, for one), Windows cannot see the entry and there is nothing to test.
+            // On the CI runners the registry is the real one, and there this has to work.
+            Assert.False(Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true", $"the shell refused the menu entry: 0x{verdict:X8}");
             return;
         }
 

@@ -42,8 +42,10 @@ For every file:
   encryption and after decryption. No file-encryption tool can defend a compromised endpoint.
 - **Metadata.** The output name is derived from the input name, the output size is the input size
   plus 29 bytes plus 16 bytes per chunk, and timestamps are whatever the filesystem records.
-  Anyone can see that a file is an `.aesx` file and how large the original was. Put files in an
-  archive first if names or the number of files are sensitive.
+  Anyone can see that a file is an `.aesx` file and how large the original was. If the names or
+  the number of files are sensitive, encrypt the folder that holds them rather than the files one
+  by one: inside a `.folder.aesx` file names, sizes and structure are encrypted with the
+  contents, and only the folder's name and the total size remain visible.
 - **Plaintext left elsewhere.** The original (unless you pass `--delete`), earlier copies,
   cloud-sync caches, editor backups, swap and hibernation files, and the recycle bin may still
   hold the data. `--delete` is an ordinary deletion, not a secure wipe; on modern SSDs no
@@ -107,6 +109,15 @@ requirement. A file is limited to 2^32 chunks (4 PiB) to stay within NIST SP 800
 **One key per file, from a per-file salt.** Several files encrypted with one password in one run
 still get distinct keys, and compromising one file's key tells nothing about the others.
 
+**Folders are a tar archive inside the same format.** Encrypting a folder did not need a new
+format, only a payload: the folder is written as a POSIX (pax) tar archive straight into the
+cipher and read straight out of it, by the tar implementation of the .NET base class library, so
+there is still no third-party code and no archive parser written here. The order matters: the
+archive is produced before encryption and parsed only after authentication. Whoever does not
+know the password cannot get a single byte in front of the tar reader, and an `.aesx` file
+remains an `.aesx` file that any implementation of [FORMAT.md](FORMAT.md) can decrypt, to
+something any `tar` can read.
+
 **Not compatible with AES Crypt.** The `.aes` format predates widespread AEAD support and
 authenticates whole files rather than chunks. Reproducing it would mean reproducing its design
 rather than its goals; aesx keeps the workflow and replaces the format.
@@ -125,6 +136,28 @@ rather than its goals; aesx keeps the workflow and replaces the format.
   runs in the isolated test environment and a 1 500-round one in every CI run; every mutated file
   must be rejected with one of the two documented exception types, within seconds, releasing
   nothing but whole verified chunks.
+- That guarantee is about people who do not know the password. Unpacking an encrypted folder
+  means reading a tar archive, and an archive can only come from someone who does know it. Against
+  that person aesx is deliberately stricter than tar. It unpacks only what it writes itself: one
+  top-level folder with plain files and folders below it. A link, a device, a second top-level
+  entry, an absolute path, a `..`, an empty name, or on Windows a name the file system would
+  reinterpret (`a:b`, `aux.txt`, a trailing dot or space) rejects the whole archive. Everything is
+  written into a new private folder, with files created exclusively, so nothing that already
+  exists can be overwritten or written through, and the folder gets its real name only after the
+  last chunk has verified. What remains possible for someone who knows the password is what any
+  archive allows: making the recipient spend disk space and memory.
+- When a folder is encrypted, symbolic links and junctions are neither followed (the archive
+  could swallow half the disk, or never end) nor stored (it could plant a link on whoever unpacks
+  it); each is reported. Files are read through a wrapper that delivers exactly the length
+  announced in the archive, so a file that changes underneath cannot silently shift everything
+  after it. File contents pass through one buffer that is wiped afterwards; names and sizes also
+  pass through the tar writer's own buffers, which aesx cannot wipe. The archive records names,
+  sizes, modification times, permission bits and, as an artefact of that tar writer, the ID of the
+  aesx process that wrote it; it records no user or group names.
+- A decrypted stream on a pipe (`-o -`) cannot be taken back. Each chunk is released only after
+  its tag has verified, so nothing false is ever written, but if a later chunk is damaged the
+  earlier ones are already with the next program. The exit code is the only signal; a file as the
+  output is all or nothing.
 - Output goes to a uniquely named temporary file next to the destination, created exclusively
   (`O_EXCL`/`CREATE_NEW`, so a planted symbolic link cannot redirect the write), and is renamed
   into place only after the last chunk has verified. A wrong password, a corrupted input, a full
@@ -144,14 +177,29 @@ rather than its goals; aesx keeps the workflow and replaces the format.
 - File names are printed with control characters and bidirectional-override characters escaped,
   so a name taken from an untrusted archive cannot inject terminal escape sequences or disguise
   its extension in aesx's own output.
+- On Windows, when Explorer started aesx, the password is typed into a window instead of a
+  console: a plain Win32 dialog described in memory and run by the operating system, with no UI
+  framework behind it. The characters stay in the edit control until OK is pressed and are then
+  copied into an array that is wiped like any other password buffer; the control is overwritten
+  and emptied, which is as far as a window lets a program go. A password typed at a terminal
+  never passes through a control at all.
+- `aesx register` changes nothing outside the current user's own registry hive and installs no
+  code into Explorer. The menu entries name a class that `aesx.exe` serves itself: Windows
+  starts the executable recorded at registration, which announces the class and receives the
+  selection from Explorer. Like any association, the entries are only as trustworthy as the place
+  they point at, so keep `aesx.exe` where other users cannot replace it.
+- On Windows, `*` and `?` in a file name are expanded by aesx, since no shell does it there.
+  Matching is confined to the one directory named, never recursive, and skips hidden and system
+  files.
 - Without `--force` the final rename refuses to replace a file, so an output that appears between
   the existence check and the rename is not overwritten (no time-of-check/time-of-use window).
 - File streams are unbuffered: plaintext passes through the format's own 1 MiB buffers, which are
   wiped, and through no additional copies in stream buffers.
 - Randomness comes from `RandomNumberGenerator`, the operating system's CSPRNG.
 - Release binaries are built from tags by GitHub Actions, on the target platform, with the run
-  publicly visible, and ship with `SHA256SUMS.txt`. The same binary can be rebuilt locally with
-  one `dotnet publish` command ([BUILDING.md](BUILDING.md)).
+  publicly visible, and ship with `SHA256SUMS.txt` and, from 1.1.0 on, a signed provenance
+  attestation. The executable can be built locally from the same tag with one `dotnet publish`
+  command ([BUILDING.md](BUILDING.md)).
 - The binaries are not signed with a paid certificate, so Windows SmartScreen and macOS
   Gatekeeper warn on first launch. Building from source avoids the warnings entirely.
 
@@ -179,7 +227,13 @@ rather than its goals; aesx keeps the workflow and replaces the format.
 - CodeQL (GitHub's static analysis, `security-extended` suite) runs on every change and weekly;
   findings appear under the repository's Security tab.
 - Releases are built from tags by GitHub Actions on the target platform, with the run linked from
-  the release page, and ship with `SHA256SUMS.txt`.
+  the release page, and ship with `SHA256SUMS.txt`. From 1.1.0 on, the release workflow also
+  attests build provenance for every published file: a statement signed with the workflow run's
+  own short-lived identity and recorded in a public transparency log, saying that this file was
+  built by this repository's release workflow from this commit.
+  `gh attestation verify <file> --repo yohasacura/aesx` checks it, which a checksum published next
+  to the file cannot do. Only the job that publishes holds write permissions; the jobs that build
+  and test can read the source and nothing else.
 
 ## How it is tested
 
@@ -187,6 +241,8 @@ rather than its goals; aesx keeps the workflow and replaces the format.
   with short reads), nineteen named tampering cases, header layout, hostile iteration counts,
   cancellation, an independent re-implementation of the specification, a fixed test vector, and
   the mutation fuzzer described above (`AESX_FUZZ_ITERATIONS` and `AESX_FUZZ_SEED` control it).
+  All of that runs unchanged against the one implementation of the chunk cryptography that the
+  functions and the stream classes share.
 - The same project runs the real executable end to end: wrong passwords, damaged files,
   directories as input or output, missing output directories, symbolic links at the input and the
   output (absolute and relative), byte-order marks, UTF-16 password files, overlong and
@@ -195,19 +251,56 @@ rather than its goals; aesx keeps the workflow and replaces the format.
 - Unicode: file names and passwords in Hebrew, Arabic, Chinese, Japanese and emoji, decomposed
   characters and zero-width characters round-trip; a right-to-left override or a terminal escape
   sequence inside a file name is shown escaped and never reaches the terminal raw.
+- The stream classes are pinned to the same bytes and the same rejections as the two functions,
+  for every chunk boundary and every way of cutting the data into writes and reads.
+- Folders: round trips with empty folders, empty files, files larger than a chunk and names in
+  several scripts; links left out; permissions and times on the way back; an existing folder
+  never touched; a wrong password, a damaged file and a file cut off at a chunk boundary all
+  leaving nothing behind; a file that shrinks or grows while it is read; and eleven archives that
+  aesx would never write (a `..`, an absolute path, a second top-level folder, a symbolic link, a
+  hard link, a duplicate, something that is no archive at all), each of which must be rejected
+  without creating anything.
+- Data on standard input, `verify`, `info` and, on Windows, wildcard expansion, each with its
+  usage errors.
+- Windows Explorer: what registering writes and that unregistering removes all of it and nothing
+  else, on a scratch registry key; and end to end, with the Windows shell itself asked to invoke
+  the menu entry for a selection, the password typed into the real window, a wrong password
+  reported in a message box, and a closed window doing nothing.
+- A second implementation in another language: `tests/interop/aesx-decrypt.mjs` is written from
+  FORMAT.md with Node.js and its built-in crypto module, without packages. CI runs it on Linux,
+  Windows and macOS against the test vector, a multi-chunk file and an encrypted folder written
+  by the build under test, and against a damaged file, which it must reject.
 - `tests/scenarios/run.sh` attacks a published binary from the outside: symlink targets, a
   read-only directory, an unreadable input, a full filesystem, SIGINT and SIGTERM in the middle
   of a write, an empty environment with a bogus `HOME`, empty and oversized passwords, and the
-  usual misuse. CI runs it on Linux and macOS; [BUILDING.md](BUILDING.md#robustness-and-attack-scenarios)
+  usual misuse, and the same for folders (a named pipe inside one, links, archives made by the
+  system `tar`), for data on standard input and for `verify` and `info`. CI runs it on Linux and
+  macOS; [BUILDING.md](BUILDING.md#robustness-and-attack-scenarios)
   shows how to run it in a throw-away container with a memory limit, a read-only root filesystem
   and an unprivileged user.
 
 ## Known limitations
 
 - PBKDF2 is not memory-hard (see above).
-- There is no public-key mode, key file, multi-recipient support, compression, or hiding of
-  file size and names, and no secure-delete feature.
+- **AES-GCM does not commit to its key.** A ciphertext can be built that authenticates under
+  many different keys at once. That is of no use to someone who merely holds your file and wants
+  to read it. It matters when you decrypt files that *other people give you* with a password
+  they are not supposed to know, and they can tell whether decryption worked: an automatic drop
+  box, a script that answers, a colleague who replies "it did not open". One crafted file then
+  tests tens of thousands of candidate passwords in a single attempt, where it should test one
+  (a partitioning-oracle attack: Len, Grubbs and Ristenpart, USENIX Security 2021). A password
+  generated as recommended above is out of reach either way; a guessable one shared with many
+  senders is not. Do not use one secret password to open files from senders you do not trust. A
+  future format version can close this with a key-check value in the header, which would also
+  let aesx tell a wrong password from a damaged file.
+- There is no public-key mode, key file, multi-recipient support or compression, no padding to
+  hide a file's size, and no secure-delete feature. File names are hidden only inside an
+  encrypted folder.
 - `--password` exposes the password to other processes and to shell history; it exists for
   scripts that cannot use a pipe.
-- Decryption does not restore the original file's permissions, owner or timestamps; the format
-  stores no metadata.
+- A single file comes back without its original permissions, owner or timestamps: the format
+  stores no metadata. An encrypted folder keeps modification times and, on macOS and Linux,
+  permission bits (restored for the owner only), and nothing else: no owners, access control
+  lists, extended attributes, alternate data streams or links.
+- The Windows Explorer entries are ordinary per-user registrations. On Windows 11 they appear
+  under "Show more options", not in the short menu.
