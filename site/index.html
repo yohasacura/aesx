@@ -144,7 +144,7 @@ scoop install aesx</code></pre>
     <p>Both install the executables listed above, checked against a recorded SHA-256, and keep them up to date.</p>
 
     <h3>Verify, then run</h3>
-    <p>Each archive holds one executable plus <code>LICENSE</code>, <code>README.md</code> and <code>CHANGELOG.md</code>. Check it against <code>SHA256SUMS.txt</code> from the same release before unpacking; from 1.1.0 on, <a href="{{ '/docs/usage/#verifying-a-download' | relative_url }}"><code>gh attestation verify</code></a> also shows that the file was built by this repository's release workflow.</p>
+    <p>Each archive holds one executable plus <code>LICENSE</code>, <code>README.md</code> and <code>CHANGELOG.md</code>. Check it against <code>SHA256SUMS.txt</code> from the same release before unpacking; from 1.0.2 on, <a href="{{ '/docs/usage/#verifying-a-download' | relative_url }}"><code>gh attestation verify</code></a> also shows that the file was built by this repository's release workflow.</p>
     <div class="two-col">
       <pre class="code"><code><span class="c"># Linux and macOS</span>
 sha256sum -c SHA256SUMS.txt --ignore-missing</code></pre>

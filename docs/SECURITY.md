@@ -216,7 +216,7 @@ rather than its goals; aesx keeps the workflow and replaces the format.
   wiped, and through no additional copies in stream buffers.
 - Randomness comes from `RandomNumberGenerator`, the operating system's CSPRNG.
 - Release binaries are built from tags by GitHub Actions, on the target platform, with the run
-  publicly visible, and ship with `SHA256SUMS.txt` and, from 1.1.0 on, a signed provenance
+  publicly visible, and ship with `SHA256SUMS.txt` and, from 1.0.2 on, a signed provenance
   attestation. The executable can be built locally from the same tag with one `dotnet publish`
   command ([BUILDING.md](BUILDING.md)).
 - The binaries are not signed with a paid certificate, so Windows SmartScreen and macOS
@@ -246,7 +246,7 @@ rather than its goals; aesx keeps the workflow and replaces the format.
 - CodeQL (GitHub's static analysis, `security-extended` suite) runs on every change and weekly;
   findings appear under the repository's Security tab.
 - Releases are built from tags by GitHub Actions on the target platform, with the run linked from
-  the release page, and ship with `SHA256SUMS.txt`. From 1.1.0 on, the release workflow also
+  the release page, and ship with `SHA256SUMS.txt`. From 1.0.2 on, the release workflow also
   attests build provenance for every published file: a statement signed with the workflow run's
   own short-lived identity and recorded in a public transparency log, saying that this file was
   built by this repository's release workflow from this commit.

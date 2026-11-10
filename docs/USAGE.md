@@ -325,7 +325,7 @@ scoop install aesx
 The two small repositories behind those commands,
 [homebrew-tap](https://github.com/yohasacura/homebrew-tap) and
 [scoop-bucket](https://github.com/yohasacura/scoop-bucket), follow new releases by themselves
-and, from 1.1.0 on, refuse a release file whose build provenance does not verify.
+and, from 1.0.2 on, refuse a release file whose build provenance does not verify.
 
 **By hand:** unpack the archive from the release page and put `aesx` somewhere on your `PATH`
 (for example `/usr/local/bin`, or any folder you add to `PATH` on Windows). macOS binaries are
@@ -359,16 +359,16 @@ sha256sum -c SHA256SUMS.txt --ignore-missing        # Linux, macOS (or: shasum -
 ```
 
 ```powershell
-Get-FileHash .\aesx-1.1.0-win-x64.zip -Algorithm SHA256   # compare with the line in SHA256SUMS.txt
+Get-FileHash .\aesx-1.0.2-win-x64.zip -Algorithm SHA256   # compare with the line in SHA256SUMS.txt
 ```
 
-A checksum shows that the file is the one on the release page. Releases from 1.1.0 on also carry
+A checksum shows that the file is the one on the release page. Releases from 1.0.2 on also carry
 a build provenance attestation, which shows where it came from: a statement signed by GitHub and
 recorded in a public transparency log that this exact file was built by this repository's
 release workflow from the tagged commit. With the [GitHub CLI](https://cli.github.com):
 
 ```bash
-gh attestation verify aesx-1.1.0-win-x64.zip --repo yohasacura/aesx
+gh attestation verify aesx-1.0.2-win-x64.zip --repo yohasacura/aesx
 ```
 
 ## Scripting
