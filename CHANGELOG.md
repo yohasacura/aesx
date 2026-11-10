@@ -34,6 +34,16 @@ The file format is unchanged: every 1.x release reads what every other one write
 - **A password window on Windows.** When Explorer started aesx (a menu entry, a double-click,
   files dropped onto `aesx.exe`), the password is typed into a small window with a confirmation
   field and a "Show the password" box, instead of blind into a console.
+- **macOS Finder integration.** `aesx register` works on a Mac as well. It adds "Encrypt with
+  aesx" for files and folders and "Decrypt with aesx" for `.aesx` files to the Finder's
+  right-click menu, and creates a small application, `~/Applications/aesx.app`, that `.aesx`
+  files open with (a double-click decrypts) and that files and folders can be dropped onto. A
+  selection of any size goes to a single aesx, which asks for the password once, in a dialog
+  that macOS draws (a second time when encrypting), and reports problems in one. `aesx
+  unregister` removes all of it. Per user, without administrator rights, and made only of what
+  macOS ships: two Automator service workflows and an AppleScript droplet compiled on the spot.
+- **`--finder` on macOS**, the switch those entries put in front: ask for the password in a
+  dialog instead of on a terminal. It works in an Automator workflow or a Shortcut of your own.
 - **Installation through Homebrew and Scoop.** `brew install yohasacura/tap/aesx` on macOS and
   Linux; `scoop bucket add yohasacura https://github.com/yohasacura/scoop-bucket` and
   `scoop install aesx` on Windows. Both install the release executables by checksum and follow

@@ -188,6 +188,25 @@ rather than its goals; aesx keeps the workflow and replaces the format.
   starts the executable recorded at registration, which announces the class and receives the
   selection from Explorer. Like any association, the entries are only as trustworthy as the place
   they point at, so keep `aesx.exe` where other users cannot replace it.
+- On macOS, when the Finder started aesx, the password is typed into a dialog that macOS
+  draws: aesx runs `/usr/bin/osascript` with a fixed AppleScript (`display dialog` with a hidden
+  answer) and reads the answer from that program's standard output. The password crosses one
+  pipe between two processes of the same user, and is in no command line and no file. The
+  script itself arrives on standard input, and what varies (the name of the file) is passed as
+  an argument and never spliced into the script, so a file name cannot turn into code. The
+  answer is read as bytes into a buffer that is wiped. When encrypting, the two answers are
+  compared by aesx itself, byte for byte and in constant time; AppleScript's own comparison
+  would call `Secret` and `secret` the same. What aesx cannot wipe is the copy inside the
+  osascript process, which ends when the dialog closes.
+- `aesx register` on macOS writes three items into the home folder and nothing else: two
+  Automator service workflows under `~/Library/Services`, and an AppleScript droplet,
+  `~/Applications/aesx.app`, which macOS compiles on the spot and which is signed ad hoc, as
+  every locally built application is (the signature says nothing about who built it). No code
+  of aesx runs inside the Finder. All three only start the `aesx` recorded at registration,
+  with `--finder` and the selected paths; that path is quoted for the shell in the workflows
+  and spelled as character codes in the droplet, so no character in it can change what runs.
+  They are as trustworthy as the place they point at and as the home folder they live in:
+  whoever can write to either can change what a click starts.
 - On Windows, `*` and `?` in a file name are expanded by aesx, since no shell does it there.
   Matching is confined to the one directory named, never recursive, and skips hidden and system
   files.
@@ -266,6 +285,15 @@ rather than its goals; aesx keeps the workflow and replaces the format.
   else, on a scratch registry key; and end to end, with the Windows shell itself asked to invoke
   the menu entry for a selection, the password typed into the real window, a wrong password
   reported in a message box, and a closed window doing nothing.
+- macOS Finder: what registering writes, into scratch folders. The services are checked on every
+  system, and the shell script inside them is run by a real shell with a path of aesx full of
+  quotes, ampersands and dollar signs; the droplet is built, and its signature and declared file
+  type checked, on macOS. The logic of the dialogs (asking twice, an exact comparison, an empty
+  password, Cancel, no desktop) runs against a stand-in for `osascript`. On the macOS runner the
+  real dialog is filled in through the accessibility interface, Automator runs the services, and
+  `tests/scenarios/finder.sh` registers a published binary for real: the system performs both
+  services by name for a selection, an `.aesx` file is opened and files are dropped on the
+  application, an aesx that has moved is reported, and unregistering leaves nothing.
 - A second implementation in another language: `tests/interop/aesx-decrypt.mjs` is written from
   FORMAT.md with Node.js and its built-in crypto module, without packages. CI runs it on Linux,
   Windows and macOS against the test vector, a multi-chunk file and an encrypted folder written
@@ -304,3 +332,13 @@ rather than its goals; aesx keeps the workflow and replaces the format.
   lists, extended attributes, alternate data streams or links.
 - The Windows Explorer entries are ordinary per-user registrations. On Windows 11 they appear
   under "Show more options", not in the short menu.
+- The macOS dialog is AppleScript's standard one: a single hidden field without a way to show
+  what was typed, which is why encrypting asks a second time. It is shown by `osascript`, a
+  background program, and macOS does not promise such a dialog the keyboard: if it comes up
+  behind another window, click it. Because malware uses the same dialog to ask for login
+  passwords, security software on a managed Mac may flag or block a password prompt that comes
+  from `osascript`; the terminal is unaffected.
+- The Finder entries are services, which macOS places at the bottom of the right-click menu or,
+  when several apply, in its Services submenu. Whether macOS asks for permission before aesx
+  reads a file in Desktop, Documents or Downloads, and in whose name, is up to macOS and has
+  changed between versions.
