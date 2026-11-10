@@ -63,8 +63,8 @@ mkdir wp && cp plain.bin.aesx wp/f.aesx
 expect "wrong password -> 1" 1 - decrypt wp/f.aesx -p nope
 has "wrong password" "$ERR" && pass "wrong password message" || flunk "wrong password message: $ERR"
 [ "$(ls wp)" = "f.aesx" ] && pass "no output after wrong password" || flunk "stray files: $(listing wp)"
-cp plain.bin.aesx wp/t.aesx; printf '\x01' | dd of=wp/t.aesx bs=1 seek=1500000 conv=notrunc 2>/dev/null
-expect "flipped byte -> 1" 1 - decrypt wp/t.aesx -p "$PW"
+cp plain.bin.aesx wp/t.aesx; head -c 16 /dev/zero | dd of=wp/t.aesx bs=1 seek=1500000 conv=notrunc 2>/dev/null
+expect "overwritten bytes -> 1" 1 - decrypt wp/t.aesx -p "$PW"
 head -c 2000000 plain.bin.aesx > wp/trunc.aesx
 expect "truncated -> 1" 1 - decrypt wp/trunc.aesx -p "$PW"
 cp plain.bin.aesx wp/tail.aesx; printf 'x' >> wp/tail.aesx
@@ -82,8 +82,9 @@ no_leftovers wp && pass "no .part files" || flunk ".part files left"
 
 section "Paths and names"
 mkdir folder
-expect "directory as input -> 1" 1 - encrypt folder -p "$PW"
+expect "directory given to decrypt -> 1" 1 - decrypt folder -p "$PW"
 has "is a directory" "$ERR" && pass "directory message" || flunk "directory message: $ERR"
+expect "directory given to verify -> 1" 1 - verify folder -p "$PW"
 mkdir outdir
 expect "-o existing directory" 0 - encrypt plain.bin -p "$PW" -o outdir "${FAST[@]}"
 [ -f outdir/plain.bin.aesx ] && pass "default name inside -o directory" || flunk "missing outdir/plain.bin.aesx"
@@ -244,6 +245,100 @@ section "Streaming to standard output"
 expect "-o - with --delete -> 2" 2 - encrypt a.txt -p "$PW" -o - --delete
 expect "-o - with two inputs -> 2" 2 - encrypt a.txt b.txt -p "$PW" -o -
 expect "-o - wrong password -> 1" 1 - decrypt stream.aesx -p nope -o -
+
+section "Data on standard input"
+AESX_PASSWORD="$PW" "$AESX" encrypt - -o stdin.aesx "${FAST[@]}" < plain.bin >/dev/null 2>&1 && pass "encrypt from standard input" || flunk "encrypt from standard input"
+AESX_PASSWORD="$PW" "$AESX" decrypt - -o - -q < stdin.aesx 2>/dev/null | cmp -s plain.bin - && pass "decrypt as a filter is byte-exact" || flunk "decrypt as a filter"
+tar -cf - outdir 2>/dev/null | AESX_PASSWORD="$PW" "$AESX" encrypt - -o - -q "${FAST[@]}" 2>/dev/null | AESX_PASSWORD="$PW" "$AESX" decrypt - -o - -q 2>/dev/null | tar -tf - 2>/dev/null | grep -q 'outdir/plain.bin.aesx' \
+    && pass "tar | aesx | aesx | tar" || flunk "tar pipeline"
+expect "- without a command -> 2" 2 "data" - -p "$PW"
+expect "- without -o -> 2" 2 "data" encrypt - -p "$PW"
+expect "- with another input -> 2" 2 "data" encrypt - a.txt -p "$PW" -o outdir
+expect "- with --delete -> 2" 2 "data" encrypt - -p "$PW" -o stdin2.aesx --delete
+expect "- with a directory as -o -> 2" 2 "data" encrypt - -p "$PW" -o outdir
+expect "password cannot share standard input with the data -> 2" 2 "$PW
+data" encrypt - -o stdin3.aesx "${FAST[@]}"
+[ ! -e stdin2.aesx ] && [ ! -e stdin3.aesx ] && pass "usage errors wrote nothing" || flunk "usage errors left files"
+head -c 16 /dev/zero | dd of=stdin.aesx bs=1 seek=2000000 conv=notrunc 2>/dev/null
+AESX_PASSWORD="$PW" "$AESX" decrypt - -o stdin.out < stdin.aesx >/dev/null 2>&1; code=$?
+[ "$code" = 1 ] && [ ! -e stdin.out ] && no_leftovers . && pass "damaged data on standard input leaves no file" || flunk "damaged standard input (exit $code)"
+
+section "Checking without writing"
+expect "verify a good file" 0 - verify plain.bin.aesx -p "$PW"
+has "OK: 3,000,000 bytes" "$OUT" && pass "verify reports the size" || flunk "verify output: $OUT"
+expect "verify with a wrong password -> 1" 1 - verify plain.bin.aesx -p nope
+expect "verify a damaged file -> 1" 1 - verify wp/t.aesx -p "$PW"
+expect "verify with -o -> 2" 2 - verify plain.bin.aesx -p "$PW" -o x
+expect "verify with --delete -> 2" 2 - verify plain.bin.aesx -p "$PW" --delete
+expect "info needs no password" 0 - info plain.bin.aesx
+has "iterations  1,000" "$OUT" && has "3 chunks" "$OUT" && has "3,000,000 bytes" "$OUT" && pass "info reads the header" || flunk "info output: $OUT"
+expect "info on something else -> 1" 1 - info plain.bin
+expect "info on a truncated file -> 1" 1 - info wp/short.aesx
+expect "info with a password -> 2" 2 - info plain.bin.aesx -p "$PW"
+no_leftovers . && pass "verify and info left nothing behind" || flunk "verify or info left a .part file"
+
+section "Folders"
+mkdir -p tree/sub/empty "tree/папка 日本語"
+printf 'a' > tree/a.txt; random_file tree/sub/big.bin 2500000; printf 'unicode' > "tree/папка 日本語/файл 🔐.txt"; : > tree/zero.dat
+printf '#!/bin/sh\n' > tree/run.sh; chmod 755 tree/run.sh; chmod 664 tree/a.txt
+links=0
+if ln -s a.txt tree/link-to-file 2>/dev/null && ln -s /etc tree/link-to-etc 2>/dev/null; then links=1; fi
+fifo=0; mkfifo tree/pipe 2>/dev/null && fifo=1
+# A named pipe inside the folder must not be opened: nobody will ever write to it. If aesx tried,
+# it would wait for ever, so this one run gets a watchdog instead of blocking the whole script.
+"$AESX" encrypt tree -p "$PW" "${FAST[@]}" >"$WORK/.out" 2>"$WORK/.err" &
+pid=$!
+( sleep 120; kill -9 "$pid" 2>/dev/null ) >/dev/null 2>&1 &
+watchdog=$!
+wait "$pid" 2>/dev/null; code=$?
+kill "$watchdog" 2>/dev/null; wait "$watchdog" 2>/dev/null
+OUT=$(cat "$WORK/.out"); ERR=$(cat "$WORK/.err")
+[ "$code" = 0 ] && [ -f tree.folder.aesx ] && pass "encrypt a folder" || flunk "encrypt a folder (exit $code; $ERR)"
+if [ "$links" = 1 ]; then
+    has "not included (a link): tree/link-to-file" "$ERR" && has "not included (a link): tree/link-to-etc" "$ERR" && pass "links are left out and said so" || flunk "link warnings: $ERR"
+else
+    skip "symbolic links not available here"
+fi
+expect "verify walks the archive inside" 0 - verify tree.folder.aesx -p "$PW"
+has "a folder with" "$OUT" && pass "verify counts the files" || flunk "verify output: $OUT"
+"$AESX" decrypt tree.folder.aesx -p "$PW" -o - -q 2>/dev/null | tar -tf - > listing.txt 2>/dev/null
+grep -q '^tree/sub/big.bin$' listing.txt && grep -q '^tree/sub/empty/$' listing.txt && ! grep -q 'link-to' listing.txt && pass "the decrypted bytes are a tar archive the system tar reads" || flunk "tar listing: $(tr '\n' ' ' < listing.txt)"
+expect "an existing folder is never touched" 1 - decrypt tree.folder.aesx -p "$PW"
+has "already exists" "$ERR" && pass "existing-folder message" || flunk "existing-folder message: $ERR"
+expect "...not even with --force" 1 - decrypt tree.folder.aesx -p "$PW" --force
+expect "restore under another name" 0 - decrypt tree.folder.aesx -p "$PW" -o restored
+cmp -s tree/sub/big.bin restored/sub/big.bin && cmp -s "tree/папка 日本語/файл 🔐.txt" "restored/папка 日本語/файл 🔐.txt" && [ -d restored/sub/empty ] && [ -f restored/zero.dat ] \
+    && pass "contents, empty folders and empty files come back" || flunk "restored tree differs: $(listing restored)"
+[ ! -e restored/link-to-file ] && [ ! -e restored/link-to-etc ] && pass "no links were restored" || flunk "links were restored"
+if [ "$fifo" = 1 ]; then
+    [ -f restored/pipe ] && [ ! -p restored/pipe ] && [ ! -s restored/pipe ] && pass "a named pipe was stored as an empty file, without being opened" || flunk "named pipe: $(ls -l restored/pipe 2>&1)"
+fi
+[ "$(mode_of restored)" = "700" ] && [ "$(mode_of restored/sub)" = "700" ] && pass "restored folders are owner-only (700)" || flunk "folder modes $(mode_of restored) $(mode_of restored/sub)"
+[ "$(mode_of restored/a.txt)" = "600" ] && [ "$(mode_of restored/run.sh)" = "700" ] && pass "restored files keep the owner's bits only (600, 700 for a script)" || flunk "file modes $(mode_of restored/a.txt) $(mode_of restored/run.sh)"
+expect "wrong password restores nothing" 1 - decrypt tree.folder.aesx -p nope -o gone
+[ ! -e gone ] && no_leftovers . && pass "no folder and no .part after a wrong password" || flunk "leftovers: $(listing .)"
+cp tree.folder.aesx damaged.folder.aesx; head -c 16 /dev/zero | dd of=damaged.folder.aesx bs=1 seek=2300000 conv=notrunc 2>/dev/null
+expect "a damaged archive restores nothing" 1 - decrypt damaged.folder.aesx -p "$PW"
+[ ! -e damaged ] && no_leftovers . && pass "nothing left of the half-unpacked folder" || flunk "leftovers: $(listing .)"
+expect "--delete does not remove folders -> 1" 1 - encrypt tree -p "$PW" --delete -f "${FAST[@]}"
+[ -d tree ] && [ -f tree/a.txt ] && pass "the folder is still there" || flunk "the folder is gone"
+expect "decrypt --delete removes the archive" 0 - decrypt tree.folder.aesx -p "$PW" -o restored2 --delete
+[ -d restored2 ] && [ ! -e tree.folder.aesx ] && pass "archive gone, folder restored" || flunk "delete after unpacking"
+# Archives that aesx would never write, made with the system tar and given the folder name.
+mkdir -p evil && ln -s /etc evil/etc 2>/dev/null
+if [ -L evil/etc ] && tar -cf evil.folder evil 2>/dev/null; then
+    expect "(encrypt a foreign archive)" 0 - encrypt evil.folder -p "$PW" "${FAST[@]}"
+    rm -rf evil
+    expect "an archive holding a link is rejected" 1 - decrypt evil.folder.aesx -p "$PW"
+    [ ! -e evil ] && no_leftovers . && pass "nothing was unpacked from it" || flunk "something was unpacked: $(listing .)"
+fi
+printf 'not a tar archive at all, only pretending by its name' > fake.folder
+expect "(encrypt a file with the folder name)" 0 - encrypt fake.folder -p "$PW" "${FAST[@]}"
+rm -f fake.folder
+expect "something that is not an archive is rejected" 1 - decrypt fake.folder.aesx -p "$PW"
+[ ! -e fake ] && no_leftovers . && pass "nothing was written for it" || flunk "something was written: $(listing .)"
+expect "...but its bytes can still be had with -o -" 0 - decrypt fake.folder.aesx -p "$PW" -o - -q
+has "only pretending" "$OUT" && pass "the plain bytes come out" || flunk "plain bytes: $OUT"
 
 section "Password input oddities"
 head -c 2000000 /dev/zero | tr '\0' 'x' | "$AESX" encrypt a.txt -o overlong.aesx "${FAST[@]}" >/dev/null 2>"$WORK/.err"; code=$?
