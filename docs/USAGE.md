@@ -6,12 +6,12 @@
 
 | Command                      | Effect                                                                                                                  |
 | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `aesx <path>...`             | Encrypts each file to `<file>.aesx` and each folder to `<folder>.folder.aesx`. A file that already ends in `.aesx` is decrypted instead. This is also what happens when files are dropped onto `aesx.exe`. |
+| `aesx <path>...`             | Encrypts each file to `<file>.aesx` and each folder to `<folder>.folder.aesx`. A file that already ends in `.aesx` is decrypted instead. This is also what happens when files are dropped onto `aesx.exe`, or onto the aesx application that `aesx register` creates on a Mac. |
 | `aesx encrypt <path>...`     | Encrypts files and [folders](#folders). Aliases: `e`, `enc`.                                                            |
 | `aesx decrypt <file>...`     | Decrypts to `<file>` without its `.aesx` extension; a `.folder.aesx` file becomes the folder again. Aliases: `d`, `dec`. |
 | `aesx verify <file>...`      | Decrypts and throws the result away: proof that the file is intact and the password right, without writing anything. See [Checking a file](#checking-a-file). |
 | `aesx info <file>...`        | Prints what a file's header says: format version, iterations, chunks, decrypted size. No password involved.              |
-| `aesx register`, `aesx unregister` | Windows: adds aesx to the Explorer right-click menu for the current user, or removes it. See [Windows Explorer](#windows-explorer). |
+| `aesx register`, `aesx unregister` | Windows and macOS: adds aesx to the right-click menu of Explorer or the Finder for the current user, or removes it. See [Windows Explorer](#windows-explorer) and [macOS Finder](#macos-finder). |
 | `aesx selftest`              | Runs the checks built into the executable: round trips across chunk boundaries and a set of tampering attempts that must all be rejected. Takes about a second. |
 | `aesx --version`, `aesx --help` | Print the version or the usage summary.                                                                              |
 
@@ -25,6 +25,7 @@
 | `-f, --force`           | Overwrite an existing output file. (A folder is never overwritten.)                                          |
 | `--delete`              | Delete the input file after the output has been written. After encryption the new file is first decrypted end to end as a check; the original is kept if that fails. Folders are not deleted. |
 | `-q, --quiet`           | Print nothing but errors (also disables the progress display).                                               |
+| `--finder`              | macOS only: ask for the password in a dialog and report problems in one, instead of on a terminal. It is what the Finder entries use; see [macOS Finder](#macos-finder). |
 
 Options and names may appear in any order. `--` ends option parsing, for file names that start
 with a dash. A single `-` in place of a file name means standard input.
@@ -61,7 +62,9 @@ The first of these sources that is present is used:
    produce nothing visible (arrows, function keys, Ctrl combinations) are ignored rather than
    silently added. When Windows Explorer started aesx (a menu entry, a double-click, files dropped
    onto `aesx.exe`), the same questions are asked in a small window instead, with a box to show
-   what was typed; closing that window cancels the run and nothing is written.
+   what was typed; closing that window cancels the run and nothing is written. On a Mac, what
+   the Finder starts asks in a dialog of macOS's own: once to decrypt, and a second time when
+   encrypting; Cancel ends the run and nothing is written.
 
 **Encoding.** A typed, `--password` or `AESX_PASSWORD` password is used as UTF-8; a piped one is
 used byte for byte. Any characters work, including Hebrew, Arabic, Chinese, Japanese and emoji,
@@ -250,6 +253,60 @@ console window opens, the password window appears, the files are encrypted (or d
 they end in `.aesx`) next to the originals, and the console waits for a key press so the result
 can be read before it closes.
 
+## macOS Finder
+
+```text
+aesx register
+```
+
+sets up the Finder for the current user:
+
+- **Encrypt with aesx** in the right-click menu of files and folders,
+- **Decrypt with aesx** in the right-click menu of `.aesx` files,
+- a double-click on an `.aesx` file decrypts it,
+- files and folders can be dropped onto **aesx** in the Applications folder of your home folder
+  (`~/Applications`), which decrypts what ends in `.aesx` and encrypts the rest. Opened by
+  itself, it lets you choose the files. Drag it into the Dock if you want it at hand.
+
+Select as many items as you like: they all go to one aesx, which asks for the password once, in
+a dialog (and a second time when encrypting, to catch a typo). When it is done the new files are
+simply there; a message appears only if something was left out or went wrong. While aesx works
+on what a menu entry started, macOS turns a gear in the menu bar, and that gear's menu can stop
+it.
+
+One exception concerns the application, not the menu entries: macOS hands it the files that
+carry its "downloaded from the internet" mark separately from the rest. A selection that mixes
+both kinds, dropped on aesx or opened by double-click, is therefore asked about twice, once for
+each part. The right-click entries receive everything at once.
+
+The two entries are services. macOS lists them at the bottom of the right-click menu, or one
+level down under **Services** when several services apply to what is selected, which is common
+for folders. System Settings → Keyboard → Keyboard Shortcuts → Services is where they can be
+switched off, or given a keyboard shortcut.
+
+Everything points at the `aesx` that registered it, so put it where it will stay before
+registering, and run `aesx register` again if you move it. An aesx that is reached through a
+link on your `PATH`, which is how Homebrew installs it, is registered under that link, so the
+entries survive an upgrade. `aesx unregister` removes everything. No administrator rights are
+involved and nothing is installed into the Finder. Registering writes three items into your
+home folder, and deleting them by hand is all there is to unregistering, should aesx itself be
+gone:
+
+| Item                                               | What it is                                                           |
+| -------------------------------------------------- | -------------------------------------------------------------------- |
+| `~/Library/Services/Encrypt with aesx.workflow`    | An Automator workflow that runs one shell script with the selection. |
+| `~/Library/Services/Decrypt with aesx.workflow`    | The same for `.aesx` files.                                          |
+| `~/Applications/aesx.app`                          | An AppleScript droplet that macOS compiles on the spot; it owns the `.aesx` file type. |
+
+All three only start aesx with `--finder` in front of the paths, which is what makes it ask in
+a dialog instead of on a terminal that is not there. The switch works in an Automator workflow
+or a Shortcut of your own as well: `aesx --finder encrypt -- "$@"`.
+
+macOS guards the Desktop, Documents and Downloads folders. Should it ask whether "Automator
+Workflow Runner" (the menu entries) or "aesx" (the application) may access files there, that is
+aesx about to read what you selected; if you decline, aesx reports that it could not read the
+file, and nothing is written.
+
 ## Installing
 
 **Homebrew** (macOS and Linux) and **Scoop** (Windows) install the same executables that are
@@ -273,6 +330,9 @@ and, from 1.1.0 on, refuse a release file whose build provenance does not verify
 **By hand:** unpack the archive from the release page and put `aesx` somewhere on your `PATH`
 (for example `/usr/local/bin`, or any folder you add to `PATH` on Windows). macOS binaries are
 ad-hoc signed by the release build.
+
+Either way, `aesx register` then adds aesx to the right-click menu on [Windows](#windows-explorer)
+and [macOS](#macos-finder).
 
 ## First-run warnings
 
@@ -336,7 +396,9 @@ known in advance, a running count of files and megabytes.
 
 aesx does not read `.aes` files. Decrypt them with the AES Crypt installation you already have,
 then encrypt the results with aesx. The day-to-day workflow is the same: one password, one file
-in, one file out, from the terminal or from the right-click menu.
+in, one file out, from the terminal or from the right-click menu. On a Mac, where AES Crypt is
+an icon to drop files onto, `aesx register` gives you that as well: an aesx application that
+takes what is dropped on it, and `.aesx` files that open with a double-click.
 
 ## If aesx is ever not at hand
 
@@ -374,4 +436,6 @@ AESX_PASSWORD=... node aesx-decrypt.mjs backup.tar.aesx backup.tar
 | `standard input carries the data, so the password has to come from ...` | Set `AESX_PASSWORD` or use `-p` when the input is `-`.                       |
 | `the first line of standard input is longer than 1 MiB`   | Standard input is connected to a data file, not a password; use `-p` or `AESX_PASSWORD`, or fix the redirection. |
 | `interrupted; the unfinished output was removed`          | Ctrl+C, a closed window or a termination signal stopped the run; nothing was left behind.  |
+| `no dialog could be shown to ask for the password (...)`  | macOS: `--finder` was used where there is no desktop to show a dialog on (over SSH, for instance). Leave the switch out there and use the prompt, a pipe or `AESX_PASSWORD`. |
+| `aesx is no longer at ...` (in a dialog)                  | macOS: a Finder entry points at an aesx that was moved or deleted. Run `aesx register` again from where it is now. |
 | `AES-GCM is not available on this system`                 | The operating system's cryptography library lacks AES-GCM; aesx needs Windows 10+, macOS 13+, or Linux with OpenSSL. |

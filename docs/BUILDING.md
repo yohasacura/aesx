@@ -24,6 +24,15 @@ Explorer, the password window) calls the operating system through marshalling co
 compiler generates at build time, which is why `Aesx.Cli` sets `AllowUnsafeBlocks`; nothing
 written in the repository is marked `unsafe`, and no build step needs a native toolchain.
 
+On a Mac the suite exercises the Finder integration the same way. What `aesx register` writes
+goes into scratch folders, never into your `~/Library/Services` or `~/Applications`, and the
+password dialogs are real ones that the tests fill in through the accessibility interface, so a
+dialog flickers on the screen. That needs the Accessibility permission for the terminal or IDE
+the tests run in (System Settings → Privacy & Security → Accessibility); without it those tests
+stand aside, as does the one that launches the droplet on a Mac where `aesx register` has been
+run for real. The macOS-specific code has no native calls at all: it writes files and runs the
+programs macOS ships (`osascript`, `osacompile`, `plutil`, `codesign`).
+
 ## Produce the single-file executable
 
 ```bash
@@ -60,6 +69,14 @@ Two layers go beyond the unit tests:
   input, and folders (links, a named pipe that must not be opened, permissions on the way back,
   archives made by the system `tar` that must be refused). It prints PASS/FAIL per scenario. CI
   runs it on Linux and macOS after publishing the binary.
+- **The Finder, for real.** `AESX_REGISTER_FOR_REAL=1 tests/scenarios/finder.sh <path-to-aesx>`
+  registers a published binary in the account it runs in, has macOS perform both services by
+  name for a selection, opens an `.aesx` file and drops files on the application, checks that
+  an aesx that has moved is reported, and unregisters, typing into the dialogs through the
+  accessibility interface as it goes. It changes the right-click menu of that account while it
+  runs, so it is for a Mac nobody is sitting at: it refuses to start without that variable, and
+  where aesx is registered already. With `SCREENSHOTS=<dir>` it also saves pictures of the
+  Finder's menu and of the dialogs. CI runs it on macOS and keeps the pictures.
 - **A second implementation.** `tests/interop/aesx-decrypt.mjs` reads AESX files with Node.js
   and its built-in `crypto` module, no packages. With Node.js installed:
 
@@ -100,8 +117,10 @@ packages, the full test suite, a single-file publish for that platform, a smoke 
 published binary (version, self-tests, an encrypt/decrypt round trip of random data, a
 wrong-password check that must fail without leaving files behind, `verify` and `info`, data
 through standard input, and a folder there and back), the independent reader in Node.js against
-that binary's output, on Windows a round trip of `aesx register` and `aesx unregister`, and, on
-Linux and macOS, the scenario script above.
+that binary's output, on Windows a round trip of `aesx register` and `aesx unregister`, on
+Linux and macOS the scenario script above, and on macOS the Finder scenarios, whose pictures of
+the Finder's menu and of the dialogs are attached to the run as the artifact
+`finder-screenshots`.
 [`codeql.yml`](https://github.com/yohasacura/aesx/blob/main/.github/workflows/codeql.yml) runs
 GitHub's CodeQL analysis with the security-extended queries on the same triggers.
 
@@ -140,7 +159,8 @@ and only a repository admin can create one, so only an admin can trigger a relea
 [`.github/workflows/release.yml`](https://github.com/yohasacura/aesx/blob/main/.github/workflows/release.yml)
 then runs the test suite and
 builds the binary on each target platform's own runner (including ARM64 Windows and Linux and
-Intel macOS), ad-hoc signs the macOS binaries, runs the shipped self-tests against each binary,
+Intel macOS), ad-hoc signs the macOS binaries, runs the shipped self-tests against each binary
+(and, on the two Macs, the Finder scenarios),
 packages them as `.zip` (Windows) or `.tar.gz` (others), computes `SHA256SUMS.txt`, attests the
 build provenance of every file (`actions/attest-build-provenance`), and creates the GitHub
 release with the notes taken from the matching CHANGELOG section. A tag with a suffix such as

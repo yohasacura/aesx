@@ -65,7 +65,7 @@ Decrypting tax-return.pdf.aesx -&gt; tax-return.pdf
       <div class="card">
         <div class="card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 2l20 20M8.5 16.4a5 5 0 0 1 7 0M5 12.6a10 10 0 0 1 4.3-2.4M12 20h.01M16.9 10.9A10 10 0 0 1 19 12.6M1.5 8.8a15 15 0 0 1 5.2-3.1M10.7 5.1A15 15 0 0 1 22.5 8.8"/></svg></div>
         <h3>Completely offline</h3>
-        <p>No network code, no telemetry, no update checks, no activation. The whole product is eleven source files, a few thousand lines, and you can read all of them.</p>
+        <p>No network code, no telemetry, no update checks, no activation. The whole product is thirteen source files, a few thousand lines, and you can read all of them.</p>
       </div>
       <div class="card">
         <div class="card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l10 5-10 5L2 7l10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
@@ -90,7 +90,7 @@ Decrypting tax-return.pdf.aesx -&gt; tax-return.pdf
       <div class="card">
         <div class="card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4l7 16 2-7 7-2z"/></svg></div>
         <h3>In the right-click menu</h3>
-        <p>On Windows, <code>aesx register</code> adds <em>Encrypt with aesx</em> and <em>Decrypt with aesx</em> to Explorer for your account. Select any number of files and folders; the password is asked once, in a small window.</p>
+        <p>On Windows and macOS, <code>aesx register</code> adds <em>Encrypt with aesx</em> and <em>Decrypt with aesx</em> to Explorer or the Finder for your account. Select any number of files and folders; the password is asked once, in a small window. On a Mac, <code>.aesx</code> files then also open with a double-click.</p>
       </div>
     </div>
   </div>
@@ -159,7 +159,7 @@ Get-FileHash .\aesx-{{ version | default: "1.0.0" }}-win-x64.zip -Algorithm SHA2
 <section class="section" id="usage">
   <div class="container">
     <h2>Usage</h2>
-    <p class="intro">Use the terminal, or on Windows the right-click menu or a drop onto <code>aesx.exe</code>. Names ending in <code>.aesx</code> are decrypted; everything else, folders included, is encrypted.</p>
+    <p class="intro">Use the terminal or, on Windows and macOS, the right-click menu or a drop onto aesx. Names ending in <code>.aesx</code> are decrypted; everything else, folders included, is encrypted.</p>
     <div class="two-col">
       <pre class="code"><code>aesx &lt;path&gt;...                    encrypt; .aesx names are decrypted instead
 aesx encrypt &lt;path&gt;... [options]  files to &lt;file&gt;.aesx, folders to
@@ -167,7 +167,7 @@ aesx encrypt &lt;path&gt;... [options]  files to &lt;file&gt;.aesx, folders to
 aesx decrypt &lt;file&gt;... [options]  back to the original file or folder
 aesx verify &lt;file&gt;...             check that files decrypt, write nothing
 aesx info &lt;file&gt;...               what the header says, no password
-aesx register | unregister        Windows: the Explorer menu entries
+aesx register | unregister        Windows, macOS: the right-click menu
 aesx selftest                     run the built-in self-tests
 
 -o, --output &lt;path&gt;    output file, an existing directory, or - for stdout

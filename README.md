@@ -29,7 +29,7 @@ Done: 1,048,621 bytes in 0.1 s
   Apple CryptoKit, OpenSSL on Linux): hardware-accelerated, widely reviewed, not reimplemented
   here.
 - **Completely offline.** No network code, no telemetry, no update checks, no activation. The
-  whole product is eleven source files, a few thousand lines of C#; read them.
+  whole product is thirteen source files, a few thousand lines of C#; read them.
 - **Any file size, constant memory.** Data is processed in 1 MiB chunks, each authenticated on
   its own, so a 100 GB disk image needs the same few megabytes of RAM as a text file.
 - **Files, folders and pipes.** A folder becomes one encrypted file and comes back as the folder
@@ -39,9 +39,10 @@ Done: 1,048,621 bytes in 0.1 s
   half-unpacked folder behind (not on a wrong password, a full disk or Ctrl+C), verifies an
   encrypted file before `--delete` removes the original, and refuses same-file output and other
   foot-guns up front. Fuzzed, attacked and scanned (NuGet audit, CodeQL) in CI on every change.
-- **One executable, about 11 MB.** Download, unpack, run. On Windows, `aesx register` puts
-  "Encrypt with aesx" and "Decrypt with aesx" into the right-click menu, with a small window for
-  the password.
+- **One executable, about 11 MB.** Download, unpack, run. On Windows and macOS, `aesx register`
+  puts "Encrypt with aesx" and "Decrypt with aesx" into the right-click menu of Explorer or the
+  Finder, with a small window for the password; on a Mac, `.aesx` files then also open with a
+  double-click, and files can be dropped onto an aesx icon.
 - **Not a lock-in.** The format is specified byte for byte, with a test vector, and the
   repository contains a second, independent reader in a hundred lines of JavaScript that CI runs
   against every build.
@@ -86,7 +87,8 @@ aesx decrypt <file>... [options]  back to the name without .aesx; a .folder.aesx
                                   file becomes the folder again
 aesx verify <file>...             check that files decrypt, without writing anything
 aesx info <file>...               show what the header says (no password needed)
-aesx register | unregister        Windows: add aesx to the Explorer menus, or remove it
+aesx register | unregister        add aesx to the right-click menu of Windows Explorer
+                                  or of the Finder on macOS, or remove it again
 aesx selftest                     run the built-in self-tests
 
 -o, --output <path>    output file, an existing directory to write into, or - for stdout
@@ -140,9 +142,9 @@ aesx is an independent project with no affiliation to AES Crypt, and it does not
 
 ```text
 src/Aesx.Core/     the format: encrypt and decrypt, as functions and as streams (one file, no dependencies)
-src/Aesx.Cli/      the aesx command-line tool, folders, and the Windows Explorer integration
+src/Aesx.Cli/      the aesx command-line tool, folders, and the Explorer and Finder integration
 tests/Aesx.Tests/  xUnit suite: format, tamper cases, fuzzing, spec conformance, test vector, CLI end to end
-tests/scenarios/   attack and misuse scenarios run against the published binary
+tests/scenarios/   attack and misuse scenarios, and the Finder integration, run against the published binary
 tests/interop/     an independent reader for the format in Node.js, run against aesx's output in CI
 docs/              format specification, security, usage, building and releasing
 site/              the website: landing page, layouts and styles (docs/ is rendered as it is)
