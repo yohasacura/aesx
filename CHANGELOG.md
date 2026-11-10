@@ -7,6 +7,8 @@ documented in [docs/FORMAT.md](docs/FORMAT.md).
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-11-10
+
 The file format is unchanged: every 1.x release reads what every other one writes.
 
 ### Added
@@ -146,6 +148,7 @@ First release.
   pinned to commit SHAs, weekly scheduled runs, and Dependabot for actions, test packages and the
   .NET SDK.
 
-[Unreleased]: https://github.com/yohasacura/aesx/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/yohasacura/aesx/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/yohasacura/aesx/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/yohasacura/aesx/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/yohasacura/aesx/releases/tag/v1.0.0

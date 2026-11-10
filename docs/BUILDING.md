@@ -214,12 +214,12 @@ an ad-hoc signature, so byte-identical bundles across machines are not guarantee
 authoritative artefacts are the ones attached to the release, and the workflow run that produced
 them is linked from the release page.
 
-What can be checked instead is where a release file came from. From 1.1.0 on, each one has a
+What can be checked instead is where a release file came from. From 1.0.2 on, each one has a
 provenance attestation, signed with the release workflow run's own identity and recorded in a
 public transparency log:
 
 ```bash
-gh attestation verify aesx-1.1.0-linux-x64.tar.gz --repo yohasacura/aesx
+gh attestation verify aesx-1.0.2-linux-x64.tar.gz --repo yohasacura/aesx
 ```
 
 It names the repository, the workflow file, the commit and the run, so a file that was not

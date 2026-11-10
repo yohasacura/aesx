@@ -75,7 +75,7 @@ The binaries are not signed with a paid certificate, so Windows SmartScreen and 
 warn once about a file downloaded by hand (not about one installed by Homebrew or Scoop);
 [docs/USAGE.md](docs/USAGE.md#first-run-warnings) shows the two clicks (or the one `xattr`
 command) that get past it, and how to verify a download, including the build provenance that
-releases from 1.1.0 on carry. [docs/BUILDING.md](docs/BUILDING.md) shows how to build the
+releases from 1.0.2 on carry. [docs/BUILDING.md](docs/BUILDING.md) shows how to build the
 executable yourself with one command.
 
 ## Usage
