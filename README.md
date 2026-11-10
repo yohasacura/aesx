@@ -49,7 +49,18 @@ Done: 1,048,621 bytes in 0.1 s
 
 ## Install
 
-Download the archive for your platform from the
+With a package manager:
+
+```bash
+brew install yohasacura/tap/aesx                                        # macOS, Linux
+```
+
+```powershell
+scoop bucket add yohasacura https://github.com/yohasacura/scoop-bucket   # Windows
+scoop install aesx
+```
+
+Or download the archive for your platform from the
 [latest release](https://github.com/yohasacura/aesx/releases/latest), check it against
 `SHA256SUMS.txt`, and unpack it anywhere, ideally somewhere on your `PATH`.
 
@@ -60,9 +71,10 @@ Download the archive for your platform from the
 | Linux x64 / ARM64           | `aesx-<version>-linux-x64.tar.gz`, `aesx-<version>-linux-arm64.tar.gz` |
 
 The binaries are not signed with a paid certificate, so Windows SmartScreen and macOS Gatekeeper
-warn once; [docs/USAGE.md](docs/USAGE.md#first-run-warnings) shows the two clicks (or the one
-`xattr` command) that get past it, and how to verify a download, including the build provenance
-that releases from 1.1.0 on carry. [docs/BUILDING.md](docs/BUILDING.md) shows how to build the
+warn once about a file downloaded by hand (not about one installed by Homebrew or Scoop);
+[docs/USAGE.md](docs/USAGE.md#first-run-warnings) shows the two clicks (or the one `xattr`
+command) that get past it, and how to verify a download, including the build provenance that
+releases from 1.1.0 on carry. [docs/BUILDING.md](docs/BUILDING.md) shows how to build the
 executable yourself with one command.
 
 ## Usage

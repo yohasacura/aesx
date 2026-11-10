@@ -250,14 +250,35 @@ console window opens, the password window appears, the files are encrypted (or d
 they end in `.aesx`) next to the originals, and the console waits for a key press so the result
 can be read before it closes.
 
-## macOS and Linux
+## Installing
 
-Unpack the archive, put `aesx` somewhere on your `PATH` (for example `/usr/local/bin`), and use
-it from the terminal. macOS binaries are ad-hoc signed by the release build.
+**Homebrew** (macOS and Linux) and **Scoop** (Windows) install the same executables that are
+attached to the releases, check them against a recorded SHA-256, put `aesx` on your `PATH` and
+keep it up to date:
+
+```bash
+brew install yohasacura/tap/aesx
+```
+
+```powershell
+scoop bucket add yohasacura https://github.com/yohasacura/scoop-bucket
+scoop install aesx
+```
+
+The two small repositories behind those commands,
+[homebrew-tap](https://github.com/yohasacura/homebrew-tap) and
+[scoop-bucket](https://github.com/yohasacura/scoop-bucket), follow new releases by themselves
+and, from 1.1.0 on, refuse a release file whose build provenance does not verify.
+
+**By hand:** unpack the archive from the release page and put `aesx` somewhere on your `PATH`
+(for example `/usr/local/bin`, or any folder you add to `PATH` on Windows). macOS binaries are
+ad-hoc signed by the release build.
 
 ## First-run warnings
 
-The binaries are not signed with a paid certificate, so the first launch triggers a warning:
+The binaries are not signed with a paid certificate, so the first launch of a file you
+downloaded yourself triggers a warning. (Homebrew and Scoop do not mark what they download as
+coming from the internet, so an aesx installed through them starts without one.)
 
 - **Windows SmartScreen:** "Windows protected your PC" → **More info** → **Run anyway**. Shown once
   per download.
