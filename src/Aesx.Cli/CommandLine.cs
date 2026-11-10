@@ -21,7 +21,7 @@ internal enum Command
     /// <summary>Print what the header says; no password involved.</summary>
     Info,
 
-    /// <summary>Add aesx to the Windows Explorer menus of the current user.</summary>
+    /// <summary>Add aesx to the right-click menus of the current user: Windows Explorer, or the Finder on macOS.</summary>
     Register,
     Unregister,
 
@@ -44,14 +44,24 @@ internal sealed class Options
     public bool DeleteInput { get; set; }
     public bool Quiet { get; set; }
 
-    /// <summary>The inputs were selected in Windows Explorer, so the person is at a desktop, not at a terminal.</summary>
-    public bool FromExplorer { get; set; }
+    /// <summary>
+    /// The inputs were selected in Windows Explorer or in the Finder, so the person is at a
+    /// desktop, not at a terminal: the password is asked for in a window, and so is said
+    /// whatever needs saying afterwards.
+    /// </summary>
+    public bool FromDesktop { get; set; }
 }
 
 internal static class CommandLine
 {
     /// <summary>As an input: read the data from standard input. As <c>-o</c>: write it to standard output.</summary>
     public const string StandardStream = "-";
+
+    /// <summary>
+    /// What the Finder entries on macOS put in front of everything else. There is no terminal
+    /// behind a menu, so the password is asked for in a dialog and problems are reported in one.
+    /// </summary>
+    public const string FinderSwitch = "--finder";
 
     public static Options Parse(string[] args)
     {
@@ -86,6 +96,9 @@ internal static class CommandLine
                     break;
                 case "-q" or "--quiet":
                     o.Quiet = true;
+                    break;
+                case FinderSwitch when OperatingSystem.IsMacOS():
+                    o.FromDesktop = true;
                     break;
                 case "-o" or "--output":
                     o.Output = Value(args, ref i, a);
@@ -254,6 +267,15 @@ internal static class CommandLine
     public static void PrintUsage(TextWriter writer)
     {
         string ext = AesxFormat.FileExtension;
+
+        // Only a Mac has the switch, so only a Mac's help mentions it.
+        string finder = OperatingSystem.IsMacOS()
+            ? $"""
+
+                    {FinderSwitch}             ask for the password in a dialog and report problems
+                                         in one, as the Finder entries do
+              """
+            : "";
         writer.WriteLine($"""
             aesx {Program.Version} - offline file encryption (AES-256-GCM, PBKDF2-HMAC-SHA256)
 
@@ -264,7 +286,8 @@ internal static class CommandLine
                                                 file becomes the folder again
               aesx verify <file>...             check that files decrypt, without writing anything
               aesx info <file>...               show what the header says (no password needed)
-              aesx register | unregister        Windows: add aesx to the Explorer menus, or remove it
+              aesx register | unregister        add aesx to the right-click menu of Windows Explorer
+                                                or of the Finder on macOS, or remove it again
               aesx selftest                     run the built-in self-tests
 
             Options:
@@ -278,7 +301,7 @@ internal static class CommandLine
                                        and, for encryption, verified
               -q, --quiet              no progress output
               -h, --help               show this help
-              -V, --version            show the version
+              -V, --version            show the version{finder}
 
             A single "-" as the input reads the data from standard input (with -o).
             Password sources, first one found wins: -p, the {PasswordInput.EnvironmentVariable} environment

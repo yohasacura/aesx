@@ -18,7 +18,7 @@ internal static class PasswordInput
     /// -p/--password (UTF-8 of the argument), the AESX_PASSWORD environment variable (UTF-8),
     /// piped standard input (the raw bytes of its first line), and finally the person at the
     /// keyboard (UTF-8 of the characters typed, without echo, confirmed when encrypting): on the
-    /// terminal, or in a window when Windows Explorer started aesx.
+    /// terminal, or in a window when Windows Explorer or the Finder started aesx.
     /// </summary>
     /// <param name="options">The parsed command line.</param>
     /// <param name="confirm">Ask twice, because a typo while encrypting would lock the owner out.</param>
@@ -43,9 +43,9 @@ internal static class PasswordInput
         if (standardInputIsData)
             throw new UsageException($"standard input carries the data, so the password has to come from {EnvironmentVariable} or -p");
 
-        // Somebody who chose a menu entry in Explorer is at the desktop: there is no pipe to
-        // read a password from, whatever standard input happens to be connected to.
-        if (!options.FromExplorer && Console.IsInputRedirected)
+        // Somebody who chose a menu entry in Explorer or in the Finder is at the desktop: there
+        // is no pipe to read a password from, whatever standard input happens to be connected to.
+        if (!options.FromDesktop && Console.IsInputRedirected)
         {
             byte[] piped = ConsoleSupport.ReadStandardInputLine();
             if (piped.Length == 0)
@@ -53,12 +53,16 @@ internal static class PasswordInput
             return piped;
         }
 
-        if (OperatingSystem.IsWindows() && (options.FromExplorer || ConsoleSupport.OwnsItsConsole()))
+        if (OperatingSystem.IsWindows() && (options.FromDesktop || ConsoleSupport.OwnsItsConsole()))
         {
             char[]? typed = PasswordDialog.Ask(purpose, confirm);
             if (typed is not null) return Encode(typed);
             // No window could be shown (no desktop, for instance): the terminal still works.
         }
+
+        // What the Finder starts has no terminal to fall back on: a dialog, or nothing.
+        if (OperatingSystem.IsMacOS() && options.FromDesktop)
+            return Encode(FinderDialogs.OfThisSystem.AskPassword(purpose, confirm));
 
         byte[] password = ReadFromTerminal("Password: ");
         if (password.Length == 0)

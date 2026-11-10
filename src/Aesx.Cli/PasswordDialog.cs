@@ -186,14 +186,10 @@ internal static partial class PasswordDialog
     /// <summary>Shows what a run started from an Explorer menu has to report, in a message box of its own.</summary>
     public static void Tell(IReadOnlyList<string> lines, bool failed)
     {
-        const int most = 15;
-        var text = new StringBuilder();
-        foreach (string line in lines.Take(most)) text.AppendLine(line);
-        if (lines.Count > most) text.AppendLine($"... and {lines.Count - most} more.");
         using (new VisualStyles())
         {
             // An OK button; an error or a warning icon; asking to come to the front.
-            MessageBoxW(0, text.ToString().TrimEnd(), Title, (failed ? 0x10u : 0x30u) | 0x10000u);
+            MessageBoxW(0, Notices.Digest(lines), Title, (failed ? 0x10u : 0x30u) | 0x10000u);
         }
     }
 

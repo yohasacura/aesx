@@ -8,22 +8,27 @@ using Microsoft.Win32;
 
 namespace Aesx.Cli;
 
-/// <summary><c>aesx register</c> and <c>aesx unregister</c>: Windows Explorer integration for the current user.</summary>
+/// <summary>
+/// <c>aesx register</c> and <c>aesx unregister</c>: the right-click menus of the current user, in
+/// Windows Explorer (this file) and in the Finder on macOS (<see cref="FinderIntegration"/>).
+/// </summary>
 internal static class ShellIntegration
 {
     public static int Run(Options options)
     {
         string command = options.Command.ToString().ToLowerInvariant();
         if (options.Inputs.Count > 0 || options.Output is not null || options.Password is not null
-            || options.Force || options.DeleteInput || options.IterationsSpecified)
+            || options.Force || options.DeleteInput || options.IterationsSpecified || options.FromDesktop)
         {
             throw new UsageException($"'{command}' takes no arguments");
         }
+
+        TextWriter status = options.Quiet ? TextWriter.Null : Console.Out;
+        if (OperatingSystem.IsMacOS()) return FinderIntegration.Run(options, status);
         if (!OperatingSystem.IsWindows())
-            throw new PlatformNotSupportedException($"'{command}' sets up the Windows Explorer menus; there is nothing for it to do on this system");
+            throw new PlatformNotSupportedException($"'{command}' sets up the right-click menus of Windows Explorer and of the Finder on macOS; there is nothing for it to do on this system");
 
         using RegistryKey classes = Registry.CurrentUser.CreateSubKey(@"Software\Classes");
-        TextWriter status = options.Quiet ? TextWriter.Null : Console.Out;
 
         if (options.Command == Command.Unregister)
         {
