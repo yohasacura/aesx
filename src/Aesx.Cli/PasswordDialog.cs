@@ -10,9 +10,9 @@ using System.Text;
 namespace Aesx.Cli;
 
 /// <summary>
-/// The password window shown when Windows Explorer started aesx (a double-click, a menu entry,
-/// Send to, a drag-and-drop): a plain Win32 dialog with a password field, a second one to
-/// confirm when encrypting, and a box to show what was typed. Somebody who did not open a
+/// The password window shown when Windows Explorer started aesx (a menu entry, a double-click,
+/// files dropped onto the executable): a plain Win32 dialog with a password field, a second one
+/// to confirm when encrypting, and a box to show what was typed. Somebody who did not open a
 /// terminal should not have to type into one blind.
 /// </summary>
 /// <remarks>
