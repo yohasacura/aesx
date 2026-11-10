@@ -221,8 +221,7 @@ public class WindowsShellTests
             Shell.Type(window, PasswordDialog.PasswordField, "not the password");
             Shell.Press(window, PasswordDialog.OkButton);
 
-            nint report = Shell.WaitForWindow(aesx.Id, withPasswordField: false, Patience);
-            Assert.Contains("wrong password", Shell.TextIn(report), StringComparison.Ordinal);
+            nint report = Shell.WaitForMessage(aesx.Id, "wrong password", Patience);
             Shell.Close(report);
             await aesx.WaitForExitAsync(new CancellationTokenSource(Patience).Token);
             Assert.Equal(1, aesx.ExitCode);
@@ -254,8 +253,7 @@ public class WindowsShellTests
             Shell.Press(window, PasswordDialog.OkButton);
 
             // The two do not match: a message says so, and the window stays for another try.
-            nint complaint = Shell.WaitForWindow(aesx.Id, withPasswordField: false, Patience);
-            Assert.Contains("not the same", Shell.TextIn(complaint), StringComparison.Ordinal);
+            nint complaint = Shell.WaitForMessage(aesx.Id, "not the same", Patience);
             Shell.Close(complaint);
             Shell.WaitUntilGone(complaint, Patience);
 
@@ -492,6 +490,39 @@ public class WindowsShellTests
                 if (found != 0) return found;
                 if (Stopwatch.GetElapsedTime(started) > patience)
                     throw new TimeoutException($"aesx did not show its {(withPasswordField ? "password window" : "message")} within {patience.TotalSeconds:F0} s");
+                Thread.Sleep(50);
+            }
+        }
+
+        /// <summary>
+        /// Waits for a message box of aesx that says <paramref name="expected"/>. Looking for "a
+        /// dialog without a password field" is not enough: a password window that is just being
+        /// torn down has lost its fields too, and a message box that is just being built has no
+        /// text yet. So this keeps looking until the words are there.
+        /// </summary>
+        public static nint WaitForMessage(int processId, string expected, TimeSpan patience)
+        {
+            long started = Stopwatch.GetTimestamp();
+            string seen = "";
+            while (true)
+            {
+                nint found = 0;
+                EnumWindows(
+                    (window, unused) =>
+                    {
+                        _ = GetWindowThreadProcessId(window, out uint owner);
+                        if (owner != processId || ClassOf(window) != "#32770" || TextOf(window) != PasswordDialog.Title) return true;
+                        if (Control(window, PasswordDialog.PasswordField) != 0) return true;
+                        string text = TextIn(window);
+                        if (text.Length > 0) seen = text;
+                        if (!text.Contains(expected, StringComparison.Ordinal)) return true;
+                        found = window;
+                        return false;
+                    },
+                    0);
+                if (found != 0) return found;
+                if (Stopwatch.GetElapsedTime(started) > patience)
+                    throw new TimeoutException($"aesx did not show a message saying '{expected}' within {patience.TotalSeconds:F0} s; the last message seen was: '{seen.Trim()}'");
                 Thread.Sleep(50);
             }
         }
