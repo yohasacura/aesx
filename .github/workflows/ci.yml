@@ -166,3 +166,20 @@ jobs:
             FULL_DIR=/mnt/aesx-full
           fi
           FULL_DIR="$FULL_DIR" bash tests/scenarios/run.sh out/aesx
+
+      # Registers the published binary in the runner's own account, has macOS perform both
+      # services and open and drop files the way the Finder does, and unregisters again.
+      - name: Finder integration, registered, used and removed again (macOS)
+        if: runner.os == 'macOS'
+        timeout-minutes: 15
+        shell: bash
+        run: AESX_REGISTER_FOR_REAL=1 SCREENSHOTS=finder-screenshots bash tests/scenarios/finder.sh out/aesx
+
+      - name: Pictures of the Finder's menu and the dialogs (macOS)
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: finder-screenshots
+          path: finder-screenshots
+          if-no-files-found: ignore
+          retention-days: 14
