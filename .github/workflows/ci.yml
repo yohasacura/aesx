@@ -98,6 +98,60 @@ jobs:
             exit 1
           fi
           [ ! -e sample.wrong ] && [ -z "$(ls sample.wrong.*.part 2>/dev/null)" ]
+          "$BIN" info sample.bin.aesx
+          printf 'ci-password\n' | "$BIN" verify sample.bin.aesx
+          # As a filter: the data arrives on standard input, the password in the environment.
+          AESX_PASSWORD=ci-password "$BIN" encrypt - -o piped.aesx --iterations 1000 < sample.bin
+          AESX_PASSWORD=ci-password "$BIN" decrypt - -o - < piped.aesx | cmp - sample.bin
+          # A folder, there and back.
+          mkdir -p tree/sub/empty && printf 'a' > tree/sub/a.txt && cp sample.bin tree/big.bin
+          AESX_PASSWORD=ci-password "$BIN" encrypt tree --iterations 1000
+          AESX_PASSWORD=ci-password "$BIN" verify tree.folder.aesx
+          AESX_PASSWORD=ci-password "$BIN" decrypt tree.folder.aesx --output restored
+          diff -r tree restored && [ -d restored/sub/empty ]
+
+      - name: An independent reader (Node.js, no packages) agrees with aesx
+        shell: bash
+        run: |
+          set -euxo pipefail
+          READER=tests/interop/aesx-decrypt.mjs
+          node --version
+          # The test vector printed in docs/FORMAT.md.
+          node -e "require('fs').writeFileSync('vector.aesx', Buffer.from('4145535801e8030000000102030405060708090a0b0c0d0e0f010203044a1c50e26e9863c67f7204ef37d91203f95df97cef603b50f223a7388303829043bfe01e82564366ca161811fc7e244395ade905caacee554d63fa', 'hex'))"
+          AESX_PASSWORD='aesx test vector' node "$READER" vector.aesx vector.txt
+          [ "$(cat vector.txt)" = "The quick brown fox jumps over the lazy dog" ]
+          # A file of three chunks and an encrypted folder, both written by aesx just now.
+          AESX_PASSWORD=ci-password node "$READER" sample.bin.aesx sample.node
+          cmp sample.bin sample.node
+          AESX_PASSWORD=ci-password node "$READER" tree.folder.aesx tree.tar
+          tar -tf tree.tar | LC_ALL=C sort | tr '\n' ' ' | tee listing.txt
+          grep -Fq 'tree/ tree/big.bin tree/sub/ tree/sub/a.txt tree/sub/empty/' listing.txt
+          # Damage is rejected, and no output is left behind.
+          cp sample.bin.aesx damaged.aesx
+          head -c 16 /dev/zero | dd of=damaged.aesx bs=1 seek=2500000 conv=notrunc
+          if AESX_PASSWORD=ci-password node "$READER" damaged.aesx damaged.out; then
+            echo "a damaged file must fail" >&2
+            exit 1
+          fi
+          [ ! -e damaged.out ]
+
+      - name: Explorer registration, written and removed again (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $aesx = (Resolve-Path out/aesx.exe).Path
+          & $aesx register
+          if ($LASTEXITCODE -ne 0) { throw "register failed" }
+          $class = (Get-ItemProperty -LiteralPath 'HKCU:\Software\Classes\*\shell\aesx\command').DelegateExecute
+          $server = (Get-ItemProperty -LiteralPath "HKCU:\Software\Classes\CLSID\$class\LocalServer32").'(default)'
+          if ($server -ne ('"' + $aesx + '"')) { throw "the class points at $server" }
+          if ((Get-ItemProperty -LiteralPath 'HKCU:\Software\Classes\.aesx').'(default)' -ne 'aesx.EncryptedFile') { throw ".aesx is not registered" }
+          & $aesx unregister
+          if ($LASTEXITCODE -ne 0) { throw "unregister failed" }
+          foreach ($key in 'HKCU:\Software\Classes\*\shell\aesx', 'HKCU:\Software\Classes\Directory\shell\aesx', 'HKCU:\Software\Classes\aesx.EncryptedFile', "HKCU:\Software\Classes\CLSID\$class") {
+            if (Test-Path -LiteralPath $key) { throw "unregister left $key behind" }
+          }
 
       - name: Attack and misuse scenarios against the published binary
         if: runner.os != 'Windows'
