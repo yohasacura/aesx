@@ -135,7 +135,7 @@ internal static class ConsoleSupport
 
 /// <summary>
 /// Warnings and errors go to standard error, and into a list as well when somebody will want to
-/// show them elsewhere afterwards (see the Explorer menu entries).
+/// show them elsewhere afterwards (see the menu entries of Explorer and the Finder).
 /// </summary>
 internal static class Notices
 {
@@ -145,6 +145,16 @@ internal static class Notices
     {
         Console.Error.WriteLine(line);
         Collector?.Add(line);
+    }
+
+    /// <summary>The lines as one text that fits a window: the first fifteen, and how many more there were.</summary>
+    public static string Digest(IReadOnlyList<string> lines)
+    {
+        const int most = 15;
+        var text = new StringBuilder();
+        foreach (string line in lines.Take(most)) text.AppendLine(line);
+        if (lines.Count > most) text.AppendLine($"... and {lines.Count - most} more.");
+        return text.ToString().TrimEnd();
     }
 }
 

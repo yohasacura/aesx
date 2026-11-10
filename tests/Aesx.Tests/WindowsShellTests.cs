@@ -120,17 +120,20 @@ public class WindowsShellTests
     }
 
     [Fact]
-    public async Task RegisterNeedsWindowsAndTakesNoArguments()
+    public async Task RegisterNeedsWindowsOrAMacAndTakesNoArguments()
     {
         CliResult extra = await Cli.RunAsync(null, "register", "something");
         Assert.Equal(2, extra.ExitCode);
         Assert.Contains("takes no arguments", extra.Stderr, StringComparison.Ordinal);
         Assert.Equal(2, (await Cli.RunAsync(null, "unregister", "--force")).ExitCode);
 
-        if (OperatingSystem.IsWindows()) return; // on Windows a plain 'register' would change the menus of whoever runs the tests
+        // Where there is something to register with, a plain 'register' would change the menus
+        // of whoever runs the tests.
+        if (OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()) return;
         CliResult run = await Cli.RunAsync(null, "register");
         Assert.Equal(1, run.ExitCode);
         Assert.Contains("Windows Explorer", run.Stderr, StringComparison.Ordinal);
+        Assert.Contains("Finder", run.Stderr, StringComparison.Ordinal);
     }
 
     [Fact]

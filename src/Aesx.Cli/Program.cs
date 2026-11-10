@@ -16,8 +16,8 @@ internal static class Program
 
     private const string StandardStream = CommandLine.StandardStream;
 
-    /// <summary>Set when an Explorer menu entry started this run: the outcome is then shown in a window, and nothing waits for a key.</summary>
-    private static bool s_startedFromExplorerMenu;
+    /// <summary>Set when a menu entry of Explorer or the Finder started this run: the outcome is then shown in a window, and nothing waits for a key.</summary>
+    private static bool s_startedFromDesktop;
 
     /// <summary>What happens to one input.</summary>
     private enum Operation
@@ -60,7 +60,7 @@ internal static class Program
             if (Environment.GetEnvironmentVariable("AESX_DEBUG") == "1") Console.Error.WriteLine(ex);
             code = ExitFailure;
         }
-        if (!s_startedFromExplorerMenu) ConsoleSupport.PauseIfLaunchedFromExplorer();
+        if (!s_startedFromDesktop) ConsoleSupport.PauseIfLaunchedFromExplorer();
         return code;
     }
 
@@ -82,7 +82,7 @@ internal static class Program
             case Command.Explorer:
                 return RunForExplorer();
             default:
-                return RunOn(o);
+                return o.FromDesktop ? RunForDesktop(o) : RunOn(o);
         }
     }
 
@@ -100,7 +100,7 @@ internal static class Program
 
         var options = new Options
         {
-            FromExplorer = true,
+            FromDesktop = true,
             Command = delivery.Verb switch
             {
                 ShellRegistration.EncryptVerb => Command.Encrypt,
@@ -109,11 +109,17 @@ internal static class Program
             },
         };
         options.Inputs.AddRange(delivery.Paths);
+        return RunForDesktop(options);
+    }
 
-        // Windows may have started this process with or without a console window, and nobody
-        // watches one after a click in a menu: whatever needs saying is said in a window at the
-        // end. When all went well there is nothing to say, and the new files speak for themselves.
-        s_startedFromExplorerMenu = true;
+    /// <summary>
+    /// A run that began with a click in Explorer or in the Finder. Nobody watches a terminal
+    /// after that, if there is one at all: whatever needs saying is said in a window at the end.
+    /// When all went well there is nothing to say, and the new files speak for themselves.
+    /// </summary>
+    private static int RunForDesktop(Options options)
+    {
+        s_startedFromDesktop = true;
         var said = new List<string>();
         Notices.Collector = said;
         int code;
@@ -126,6 +132,11 @@ internal static class Program
             said.Add("Interrupted; the unfinished output was removed.");
             code = ExitInterrupted;
         }
+        catch (UsageException ex)
+        {
+            Notices.Say($"error: {ex.Message}");
+            code = ExitUsage;
+        }
         catch (Exception ex) when (ex is not PromptCancelledException)
         {
             Notices.Say($"error: {ex.Message}");
@@ -135,7 +146,12 @@ internal static class Program
         {
             Notices.Collector = null;
         }
-        if (said.Count > 0) PasswordDialog.Tell(said, failed: code != ExitSuccess);
+
+        if (said.Count > 0)
+        {
+            if (OperatingSystem.IsWindows()) PasswordDialog.Tell(said, failed: code != ExitSuccess);
+            else if (OperatingSystem.IsMacOS()) FinderDialogs.OfThisSystem.Tell(said, failed: code != ExitSuccess);
+        }
         return code;
     }
 
