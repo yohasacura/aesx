@@ -144,6 +144,9 @@ internal static class Cli
         s_dllArgument = dll;
     }
 
+    /// <summary>The executable itself, for whatever has to name one file to start; null where aesx only exists as a library for <c>dotnet</c>.</summary>
+    public static string? Executable => s_dllArgument is null ? s_fileName : null;
+
     /// <summary>Runs aesx with <paramref name="stdin"/> piped in (null closes stdin immediately) and captures everything.</summary>
     public static Task<CliResult> RunAsync(string? stdin, params string[] args) => RunWithAsync(new CliRun { Stdin = stdin }, args);
 
