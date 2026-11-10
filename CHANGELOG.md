@@ -34,6 +34,10 @@ The file format is unchanged: every 1.x release reads what every other one write
 - **A password window on Windows.** When Explorer started aesx (a menu entry, a double-click,
   files dropped onto `aesx.exe`), the password is typed into a small window with a confirmation
   field and a "Show the password" box, instead of blind into a console.
+- **Installation through Homebrew and Scoop.** `brew install yohasacura/tap/aesx` on macOS and
+  Linux; `scoop bucket add yohasacura https://github.com/yohasacura/scoop-bucket` and
+  `scoop install aesx` on Windows. Both install the release executables by checksum and follow
+  new releases by themselves.
 - **Build provenance for releases.** The release workflow attests every published file;
   `gh attestation verify <file> --repo yohasacura/aesx` shows that it was built by this
   repository's release workflow from the tagged commit.

@@ -147,6 +147,23 @@ release with the notes taken from the matching CHANGELOG section. A tag with a s
 `v1.3.0-rc.1` is published as a pre-release. Only the publishing job has write permissions
 (to create the release and to sign and store the attestation); the build jobs can only read.
 
+### Package managers
+
+The Homebrew tap and the Scoop bucket
+([homebrew-tap](https://github.com/yohasacura/homebrew-tap),
+[scoop-bucket](https://github.com/yohasacura/scoop-bucket)) pick a release up on their daily
+run: each downloads the release files, verifies their provenance attestation, computes the
+checksums and commits its new formula or manifest, which its own Test workflow then installs or
+checks. To have them follow at once:
+
+```bash
+gh workflow run update.yml --repo yohasacura/homebrew-tap
+gh workflow run update.yml --repo yohasacura/scoop-bucket
+```
+
+GitHub switches scheduled workflows off in a repository that has seen no activity for sixty
+days; starting them by hand as above is also the way to switch them back on.
+
 ## Versioning
 
 The product follows [Semantic Versioning](https://semver.org). The file format has its own
