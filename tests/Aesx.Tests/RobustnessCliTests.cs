@@ -47,19 +47,6 @@ public class RobustnessCliTests
     }
 
     [Fact]
-    public async Task RefusesADirectoryAsInput()
-    {
-        using var dir = new TempDir();
-        Directory.CreateDirectory(dir.File("folder"));
-
-        CliResult run = await Cli.RunAsync(null, "encrypt", dir.File("folder"), "-p", Pw);
-
-        Assert.Equal(1, run.ExitCode);
-        Assert.Contains("is a directory", run.Stderr, StringComparison.Ordinal);
-        Assert.Empty(dir.Files());
-    }
-
-    [Fact]
     public async Task RefusesWhenTheOutputPathIsADirectory()
     {
         using var dir = new TempDir();

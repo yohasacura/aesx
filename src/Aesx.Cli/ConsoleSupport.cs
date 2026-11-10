@@ -95,23 +95,31 @@ internal static class ConsoleSupport
     }
 
     /// <summary>
-    /// When started by double-click or drag-and-drop on Windows, the console window belongs to
-    /// this process alone and would vanish the instant it exits. Wait for a key so the result
-    /// (or the error) can be read.
+    /// True when this process has a console window all to itself, which is what a double-click,
+    /// a drag-and-drop or a menu entry in Windows Explorer produces: no shell is waiting behind
+    /// the window, and nobody chose to work in a terminal.
+    /// </summary>
+    public static bool OwnsItsConsole()
+    {
+        if (!OperatingSystem.IsWindows() || Console.IsInputRedirected || Console.IsOutputRedirected) return false;
+
+        // With a one-element buffer the call returns how many processes share this console;
+        // 1 means no shell launched us.
+        uint first = 0;
+        return GetConsoleProcessList(ref first, 1) == 1;
+    }
+
+    /// <summary>
+    /// A console window that belongs to this process alone would vanish the instant it exits.
+    /// Wait for a key so the result (or the error) can be read.
     /// </summary>
     public static void PauseIfLaunchedFromExplorer()
     {
-        if (!OperatingSystem.IsWindows() || Console.IsInputRedirected || Console.IsOutputRedirected) return;
+        if (!OwnsItsConsole()) return;
         try
         {
-            // With a one-element buffer the call returns how many processes share this console;
-            // 1 means no shell launched us.
-            uint first = 0;
-            if (GetConsoleProcessList(ref first, 1) == 1)
-            {
-                Console.Error.Write("Press any key to close...");
-                Console.ReadKey(intercept: true);
-            }
+            Console.Error.Write("Press any key to close...");
+            Console.ReadKey(intercept: true);
         }
         catch (Exception ex) when (ex is InvalidOperationException or IOException)
         {
@@ -123,6 +131,21 @@ internal static class ConsoleSupport
     [DllImport("kernel32.dll", ExactSpelling = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     private static extern uint GetConsoleProcessList(ref uint processList, uint processCount);
+}
+
+/// <summary>
+/// Warnings and errors go to standard error, and into a list as well when somebody will want to
+/// show them elsewhere afterwards (see the Explorer menu entries).
+/// </summary>
+internal static class Notices
+{
+    public static List<string>? Collector { get; set; }
+
+    public static void Say(string line)
+    {
+        Console.Error.WriteLine(line);
+        Collector?.Add(line);
+    }
 }
 
 /// <summary>The editing rules of the hidden password prompt, kept free of console calls so they can be tested.</summary>

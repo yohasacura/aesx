@@ -154,31 +154,7 @@ internal static class Cli
     /// <summary>The general form: every aspect of the run comes from <paramref name="run"/>.</summary>
     public static async Task<CliResult> RunWithAsync(CliRun run, params string[] args)
     {
-        var psi = new ProcessStartInfo(s_fileName)
-        {
-            WorkingDirectory = run.WorkingDirectory ?? Environment.CurrentDirectory,
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            // Pipe bytes the way modern shells do, instead of the Windows console code page.
-            StandardInputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
-            StandardErrorEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
-        };
-        psi.Environment.Remove(PasswordVariable); // never inherit one from the test host by accident
-        if (run.Environment is not null)
-        {
-            foreach ((string name, string? value) in run.Environment)
-            {
-                if (value is null) psi.Environment.Remove(name);
-                else psi.Environment[name] = value;
-            }
-        }
-        if (s_dllArgument is not null) psi.ArgumentList.Add(s_dllArgument);
-        foreach (string a in args) psi.ArgumentList.Add(a);
-
-        using var process = Process.Start(psi) ?? throw new InvalidOperationException("could not start aesx");
+        using var process = Process.Start(StartInfo(run, args)) ?? throw new InvalidOperationException("could not start aesx");
         Task<byte[]> stdout = ReadAllAsync(process.StandardOutput.BaseStream);
         Task<string> stderr = process.StandardError.ReadToEndAsync();
         try
@@ -210,6 +186,35 @@ internal static class Cli
             throw new TimeoutException("aesx did not exit within two minutes");
         }
         return new CliResult(process.ExitCode, await stdout.ConfigureAwait(false), await stderr.ConfigureAwait(false));
+    }
+
+    /// <summary>How the executable is started: every stream redirected, no window, and no password inherited from the test host.</summary>
+    public static ProcessStartInfo StartInfo(CliRun run, params string[] args)
+    {
+        var psi = new ProcessStartInfo(s_fileName)
+        {
+            WorkingDirectory = run.WorkingDirectory ?? Environment.CurrentDirectory,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            // Pipe bytes the way modern shells do, instead of the Windows console code page.
+            StandardInputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+            StandardErrorEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+        };
+        psi.Environment.Remove(PasswordVariable); // never inherit one from the test host by accident
+        if (run.Environment is not null)
+        {
+            foreach ((string name, string? value) in run.Environment)
+            {
+                if (value is null) psi.Environment.Remove(name);
+                else psi.Environment[name] = value;
+            }
+        }
+        if (s_dllArgument is not null) psi.ArgumentList.Add(s_dllArgument);
+        foreach (string a in args) psi.ArgumentList.Add(a);
+        return psi;
     }
 
     public const string PasswordVariable = "AESX_PASSWORD";

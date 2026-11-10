@@ -10,10 +10,23 @@ internal sealed class UsageException(string message) : Exception(message);
 
 internal enum Command
 {
-    /// <summary>Decide per file: decrypt if it ends in .aesx, otherwise encrypt.</summary>
+    /// <summary>Decide per input: folders are encrypted, names ending in .aesx are decrypted, everything else is encrypted.</summary>
     Auto,
     Encrypt,
     Decrypt,
+
+    /// <summary>Decrypt and discard: proves that the file is intact and the password right.</summary>
+    Verify,
+
+    /// <summary>Print what the header says; no password involved.</summary>
+    Info,
+
+    /// <summary>Add aesx to the Windows Explorer menus of the current user.</summary>
+    Register,
+    Unregister,
+
+    /// <summary>Started by Windows for one of those menu entries: the selection comes from Explorer, not from the command line.</summary>
+    Explorer,
     SelfTest,
     Help,
     Version,
@@ -30,13 +43,27 @@ internal sealed class Options
     public bool Force { get; set; }
     public bool DeleteInput { get; set; }
     public bool Quiet { get; set; }
+
+    /// <summary>The inputs were selected in Windows Explorer, so the person is at a desktop, not at a terminal.</summary>
+    public bool FromExplorer { get; set; }
 }
 
 internal static class CommandLine
 {
+    /// <summary>As an input: read the data from standard input. As <c>-o</c>: write it to standard output.</summary>
+    public const string StandardStream = "-";
+
     public static Options Parse(string[] args)
     {
         var o = new Options();
+
+        // The one argument Windows adds when it starts the program behind a menu entry.
+        if (OperatingSystem.IsWindows() && args is [var only] && only.TrimStart('-', '/').Equals("Embedding", StringComparison.OrdinalIgnoreCase))
+        {
+            o.Command = Command.Explorer;
+            return o;
+        }
+
         var positional = new List<string>();
         for (int i = 0; i < args.Length; i++)
         {
@@ -96,6 +123,10 @@ internal static class CommandLine
             {
                 "e" or "enc" or "encrypt" => Command.Encrypt,
                 "d" or "dec" or "decrypt" => Command.Decrypt,
+                "verify" => Command.Verify,
+                "info" => Command.Info,
+                "register" => Command.Register,
+                "unregister" => Command.Unregister,
                 "selftest" or "self-test" or "test" => Command.SelfTest,
                 "help" => Command.Help,
                 "version" => Command.Version,
@@ -117,15 +148,121 @@ internal static class CommandLine
         return args[++i];
     }
 
+    /// <summary>
+    /// Refuses combinations that cannot mean anything, before a password is asked for. What
+    /// depends on the file system (does the output exist, is the input a folder) is checked
+    /// later, input by input.
+    /// </summary>
+    public static void CheckCombinations(Options o, IReadOnlyList<string> inputs)
+    {
+        string name = o.Command.ToString().ToLowerInvariant();
+        if (o.Command is Command.Verify or Command.Info)
+        {
+            if (o.Output is not null) throw new UsageException($"-o/--output does not apply to '{name}', which writes nothing");
+            if (o.DeleteInput) throw new UsageException($"--delete does not apply to '{name}'");
+            if (o.Force) throw new UsageException($"-f/--force does not apply to '{name}', which writes nothing");
+            if (o.IterationsSpecified) throw new UsageException($"-i/--iterations does not apply to '{name}' (the count is stored in the file)");
+        }
+        if (o.Command == Command.Info && o.Password is not null)
+            throw new UsageException("'info' reads only the header and takes no password");
+
+        bool toStandardOutput = o.Output == StandardStream;
+        if (inputs.Contains(StandardStream))
+        {
+            if (inputs.Count > 1)
+                throw new UsageException("- (standard input) cannot be combined with other inputs");
+            switch (o.Command)
+            {
+                case Command.Auto:
+                    throw new UsageException("with - (standard input) say what to do: 'aesx encrypt - -o <file>' or 'aesx decrypt - -o <file>'");
+                case Command.Info:
+                    throw new UsageException("'info' needs a file: standard input has no length to report");
+                case Command.Encrypt or Command.Decrypt when o.Output is null:
+                    throw new UsageException("data read from standard input needs -o <file>, or -o - for standard output");
+                default:
+                    break;
+            }
+            if (o.DeleteInput)
+                throw new UsageException("--delete cannot be combined with - (there is no input file to delete)");
+            if (!Console.IsInputRedirected)
+                throw new UsageException("- reads the data from standard input, but nothing is piped or redirected into it");
+        }
+
+        if (inputs.Count > 1 && o.Output is not null && (toStandardOutput || !Directory.Exists(o.Output)))
+            throw new UsageException("with several inputs, -o/--output must name an existing directory");
+        if (toStandardOutput && o.DeleteInput)
+            throw new UsageException("--delete cannot be combined with -o - (the result cannot be verified or kept)");
+    }
+
+    /// <summary>
+    /// Expands <c>*</c> and <c>?</c> in file names on Windows, where the shell passes them on
+    /// untouched and neither can occur in a real name. Elsewhere the shell has already expanded
+    /// them, and one that arrives here was quoted on purpose, so nothing is done. Matches are
+    /// files only, sorted, without hidden and system files, like <c>dir</c> and <c>copy</c>.
+    /// </summary>
+    public static List<string> ExpandWildcards(IReadOnlyList<string> inputs)
+    {
+        var expanded = new List<string>(inputs.Count);
+        foreach (string input in inputs)
+        {
+            if (!OperatingSystem.IsWindows() || !HasWildcard(input))
+            {
+                expanded.Add(input);
+                continue;
+            }
+
+            string pattern = Path.GetFileName(input);
+            string directory = input[..^pattern.Length];
+            if (!HasWildcard(pattern) || HasWildcard(WithoutDevicePrefix(directory)))
+                throw new UsageException($"wildcards are only expanded in the file name, not in the folders before it: {TextSafety.Display(input)}");
+
+            var options = new EnumerationOptions
+            {
+                MatchType = MatchType.Win32,
+                MatchCasing = MatchCasing.CaseInsensitive,
+                AttributesToSkip = FileAttributes.Hidden | FileAttributes.System,
+                IgnoreInaccessible = false,
+                RecurseSubdirectories = false,
+            };
+            string[] matches;
+            try
+            {
+                matches = Directory.GetFiles(directory.Length == 0 ? "." : directory, pattern, options);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+            {
+                throw new InvalidOperationException($"cannot list the files for '{TextSafety.Display(input)}': {ex.Message}", ex);
+            }
+            if (matches.Length == 0)
+                throw new InvalidOperationException($"no files match '{TextSafety.Display(input)}'");
+
+            // Keep the names the way they were typed: relative stays relative.
+            Array.Sort(matches, StringComparer.OrdinalIgnoreCase);
+            foreach (string match in matches) expanded.Add(directory + Path.GetFileName(match));
+        }
+        return expanded;
+    }
+
+    private static bool HasWildcard(ReadOnlySpan<char> text) => text.IndexOfAny('*', '?') >= 0;
+
+    /// <summary>The question mark in <c>\\?\C:\...</c> is part of the prefix, not a wildcard.</summary>
+    private static ReadOnlySpan<char> WithoutDevicePrefix(ReadOnlySpan<char> path)
+        => path.StartsWith(@"\\?\") || path.StartsWith(@"\\.\") ? path[4..] : path;
+
     public static void PrintUsage(TextWriter writer)
     {
+        string ext = AesxFormat.FileExtension;
         writer.WriteLine($"""
             aesx {Program.Version} - offline file encryption (AES-256-GCM, PBKDF2-HMAC-SHA256)
 
             Usage:
-              aesx <file>...                    encrypt; files ending in {AesxFormat.FileExtension} are decrypted instead
-              aesx encrypt <file>... [options]  encrypt file(s) to <file>{AesxFormat.FileExtension}
-              aesx decrypt <file>... [options]  decrypt file(s) to <file> without {AesxFormat.FileExtension}
+              aesx <path>...                    encrypt; names ending in {ext} are decrypted instead
+              aesx encrypt <path>... [options]  files become <file>{ext}, folders <folder>{FolderArchive.Extension}
+              aesx decrypt <file>... [options]  back to the name without {ext}; a {FolderArchive.Extension}
+                                                file becomes the folder again
+              aesx verify <file>...             check that files decrypt, without writing anything
+              aesx info <file>...               show what the header says (no password needed)
+              aesx register | unregister        Windows: add aesx to the Explorer menus, or remove it
               aesx selftest                     run the built-in self-tests
 
             Options:
@@ -135,12 +272,13 @@ internal static class CommandLine
                                        and kept in shell history; prefer the prompt or stdin)
               -i, --iterations <n>     PBKDF2 iterations when encrypting (default {AesxFormat.DefaultIterations})
               -f, --force              overwrite an existing output file
-                  --delete             delete the input after the output has been written and,
-                                       for encryption, verified
+                  --delete             delete the input file after the output has been written
+                                       and, for encryption, verified
               -q, --quiet              no progress output
               -h, --help               show this help
               -V, --version            show the version
 
+            A single "-" as the input reads the data from standard input (with -o).
             Password sources, first one found wins: -p, the {PasswordInput.EnvironmentVariable} environment
             variable, the first line of stdin when it is not a terminal (a pipe or a file),
             otherwise a prompt on the terminal without echo.

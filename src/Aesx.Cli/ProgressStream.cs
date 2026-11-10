@@ -84,3 +84,37 @@ internal sealed class ProgressStream(Stream inner, long total) : Stream
         base.Dispose(disposing);
     }
 }
+
+/// <summary>
+/// The running count shown while a folder is archived: its total size is not known in advance,
+/// so there is no percentage, only proof of life. Appears after a second, under the same
+/// conditions as <see cref="ProgressStream"/>.
+/// </summary>
+internal sealed class FolderProgress(bool quiet) : IDisposable
+{
+    private static readonly TimeSpan Delay = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan Interval = TimeSpan.FromMilliseconds(250);
+
+    private readonly bool _enabled = !quiet && !Console.IsErrorRedirected;
+    private readonly long _started = Stopwatch.GetTimestamp();
+    private long _lastReport = Stopwatch.GetTimestamp();
+    private bool _shown;
+
+    public void Report(FolderSummary soFar)
+    {
+        if (!_enabled || Stopwatch.GetElapsedTime(_started) < Delay || Stopwatch.GetElapsedTime(_lastReport) < Interval) return;
+        _lastReport = Stopwatch.GetTimestamp();
+        Console.Error.Write($"\r  {soFar.Files:N0} files, {soFar.Bytes >> 20:N0} MiB");
+        _shown = true;
+    }
+
+    /// <summary>Removes the line, so that a warning or the final status starts on a clean one.</summary>
+    public void Clear()
+    {
+        if (!_shown) return;
+        Console.Error.Write("\r" + new string(' ', 40) + "\r");
+        _shown = false;
+    }
+
+    public void Dispose() => Clear();
+}
