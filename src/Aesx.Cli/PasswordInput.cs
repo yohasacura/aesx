@@ -6,6 +6,9 @@ using System.Text;
 
 namespace Aesx.Cli;
 
+/// <summary>The person closed the password window: nothing was done, and there is nothing to report or wait for.</summary>
+internal sealed class PromptCancelledException() : Exception("no password was entered");
+
 internal static class PasswordInput
 {
     public const string EnvironmentVariable = "AESX_PASSWORD";
@@ -13,10 +16,15 @@ internal static class PasswordInput
     /// <summary>
     /// Returns the password as bytes; the caller zeroes them when done. Sources, in order:
     /// -p/--password (UTF-8 of the argument), the AESX_PASSWORD environment variable (UTF-8),
-    /// piped standard input (the raw bytes of its first line), and finally the terminal
-    /// (UTF-8 of the characters typed, without echo, confirmed when encrypting).
+    /// piped standard input (the raw bytes of its first line), and finally the person at the
+    /// keyboard (UTF-8 of the characters typed, without echo, confirmed when encrypting): on the
+    /// terminal, or in a window when Windows Explorer started aesx.
     /// </summary>
-    public static byte[] Obtain(Options options, bool confirm)
+    /// <param name="options">The parsed command line.</param>
+    /// <param name="confirm">Ask twice, because a typo while encrypting would lock the owner out.</param>
+    /// <param name="standardInputIsData">Standard input carries the file, so it cannot also carry the password.</param>
+    /// <param name="purpose">What the password is for, in a few words, for the password window.</param>
+    public static byte[] Obtain(Options options, bool confirm, bool standardInputIsData, string purpose)
     {
         if (options.Password is not null)
         {
@@ -32,12 +40,24 @@ internal static class PasswordInput
             return Encoding.UTF8.GetBytes(fromEnvironment);
         }
 
-        if (Console.IsInputRedirected)
+        if (standardInputIsData)
+            throw new UsageException($"standard input carries the data, so the password has to come from {EnvironmentVariable} or -p");
+
+        // Somebody who chose a menu entry in Explorer is at the desktop: there is no pipe to
+        // read a password from, whatever standard input happens to be connected to.
+        if (!options.FromExplorer && Console.IsInputRedirected)
         {
             byte[] piped = ConsoleSupport.ReadStandardInputLine();
             if (piped.Length == 0)
                 throw new InvalidOperationException($"the password must not be empty (standard input is not a terminal, so its first line is used; -p and {EnvironmentVariable} are the alternatives)");
             return piped;
+        }
+
+        if (OperatingSystem.IsWindows() && (options.FromExplorer || ConsoleSupport.OwnsItsConsole()))
+        {
+            char[]? typed = PasswordDialog.Ask(purpose, confirm);
+            if (typed is not null) return Encode(typed);
+            // No window could be shown (no desktop, for instance): the terminal still works.
         }
 
         byte[] password = ReadFromTerminal("Password: ");
@@ -63,6 +83,12 @@ internal static class PasswordInput
         Console.Error.Write(prompt);
         char[] chars = ConsoleSupport.ReadHiddenLine();
         Console.Error.WriteLine();
+        return Encode(chars);
+    }
+
+    /// <summary>UTF-8 of the characters typed; the characters themselves are wiped.</summary>
+    private static byte[] Encode(char[] chars)
+    {
         try
         {
             WarnAboutInvisibleCharacters(chars, "the password");
@@ -78,6 +104,6 @@ internal static class PasswordInput
     {
         IReadOnlyList<string> invisible = TextSafety.InvisibleCharacters(password);
         if (invisible.Count > 0)
-            Console.Error.WriteLine($"warning: {what} contains invisible characters ({string.Join(", ", invisible)}); they count as part of it");
+            Notices.Say($"warning: {what} contains invisible characters ({string.Join(", ", invisible)}); they count as part of it");
     }
 }
