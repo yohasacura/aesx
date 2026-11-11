@@ -7,6 +7,14 @@ documented in [docs/FORMAT.md](docs/FORMAT.md).
 
 ## [Unreleased]
 
+### Changed
+
+- A release can be rehearsed. A pull request that changes the version number or the release
+  workflow builds, tests and packages on all six release runners and writes the checksums and the
+  release notes, and `gh workflow run release.yml` does the same for any branch. A rehearsal
+  attests nothing and publishes nothing, none of its jobs can write, and the website is not
+  deployed again after one.
+
 ## [1.0.2] - 2026-11-10
 
 The file format is unchanged: every 1.x release reads what every other one writes.

@@ -251,8 +251,9 @@ rather than its goals; aesx keeps the workflow and replaces the format.
   own short-lived identity and recorded in a public transparency log, saying that this file was
   built by this repository's release workflow from this commit.
   `gh attestation verify <file> --repo yohasacura/aesx` checks it, which a checksum published next
-  to the file cannot do. Only the job that publishes holds write permissions; the jobs that build
-  and test can read the source and nothing else.
+  to the file cannot do. Only the job that publishes holds write permissions, and it runs for a
+  pushed release tag only; the jobs that build and test, and all jobs of a rehearsal of the
+  release, can read the source and nothing else.
 
 ## How it is tested
 
