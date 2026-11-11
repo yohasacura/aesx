@@ -2,7 +2,8 @@
 # Jekyll builder and publishes it to GitHub Pages: https://yohasacura.github.io/aesx
 #
 # A pull request that touches the site only gets a build. main is deployed on every push and once
-# more after each successful Release run, so the download links pick up the new version.
+# more after each release, so the download links pick up the new version. The Release workflow
+# also runs rehearsals, which publish nothing: after one of those there is nothing to deploy.
 name: Pages
 
 on:
@@ -23,15 +24,21 @@ on:
 permissions:
   contents: read
 
+# Deployments wait for each other in one group. A run that follows a rehearsal or a failed release
+# deploys nothing, so it gets a group of its own: waiting in the deployments' group, it would
+# take the place of a deployment that is waiting there, and that one would never happen.
 concurrency:
-  group: pages-${{ github.event_name == 'pull_request' && github.head_ref || 'deploy' }}
+  group: pages-${{ github.event_name == 'pull_request' && github.head_ref || github.event_name == 'workflow_run' && (github.event.workflow_run.event != 'push' || github.event.workflow_run.conclusion != 'success') && 'nothing-to-deploy' || 'deploy' }}
   cancel-in-progress: false
 
 jobs:
   build:
     name: Build site
     runs-on: ubuntu-latest
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    # After the Release workflow, only for a release: started by a pushed tag, and successful.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success')
     permissions:
       contents: read
       pages: read

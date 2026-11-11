@@ -1,10 +1,29 @@
 # Pushing a tag such as v1.2.3 builds aesx for every supported platform on that platform's
 # own runner, tests it there, packages it, and publishes a GitHub release with checksums.
+#
+# A release tag can be neither moved nor deleted, so everything short of publishing can be
+# rehearsed first. A pull request that changes this file or Directory.Build.props rehearses by
+# itself (every release pull request does: it sets the version there), and so does
+#   gh workflow run release.yml [--ref <branch>] [-f version=1.2.3]
+# A rehearsal runs the same build job on the same runners, then the same steps for the checksums
+# and the release notes, and stops. It attests nothing and creates no release, and none of its
+# jobs can write anything.
 name: Release
+run-name: ${{ github.event_name == 'push' && format('Release {0}', github.ref_name) || format('Rehearsal ({0})', github.event.pull_request.title || inputs.version || github.ref_name) }}
 
 on:
   push:
     tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - Directory.Build.props
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to rehearse, such as 1.2.3 (when empty, the one in Directory.Build.props)
+        required: false
+        type: string
 
 # Each job asks for what it needs; building needs nothing but the source.
 permissions:
@@ -22,7 +41,8 @@ jobs:
     name: ${{ matrix.rid }}
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: true
+      # A release stops at the first failure; a rehearsal goes on, to show all of them.
+      fail-fast: ${{ github.event_name == 'push' }}
       matrix:
         include:
           - { os: windows-latest,   rid: win-x64 }
@@ -40,11 +60,30 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Derive version from the tag
+      # A release has the version that its tag names. A rehearsal is given one, or takes the one in
+      # Directory.Build.props. The two jobs further down run this same step (*version).
+      - &version
+        name: Derive the version
+        shell: bash
+        env:
+          REQUESTED: ${{ inputs.version }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="${REQUESTED:-$(sed -n '/<Version>/{s:.*<Version>\(.*\)</Version>.*:\1:p;q;}' Directory.Build.props)}"
+            VERSION="${VERSION#v}"
+            pattern='^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'
+            if ! [[ "$VERSION" =~ $pattern ]]; then
+              echo "::error::The version to rehearse has to look like 1.2.3 or 1.3.0-rc.1"
+              exit 1
+            fi
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Name the archive
         shell: bash
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "NAME=aesx-$VERSION-${{ matrix.rid }}" >> "$GITHUB_ENV"
           dotnet --version
           dotnet --list-runtimes
@@ -112,30 +151,39 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  # Only a pushed tag publishes. The steps marked with an anchor (&name) are run by the rehearsal
+  # below as well (*name), so that it tries what a release will do.
   release:
     name: Publish GitHub release
     needs: build
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write      # create the release
       id-token: write      # sign the provenance statement as this workflow run
       attestations: write  # store it with the repository
     steps:
-      - name: Check out
+      - &checkout
+        name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set up .NET (to record the toolchain in the notes)
+      - &toolchain
+        name: Set up .NET (to record the toolchain in the notes)
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           dotnet-version: 10.0.x
 
-      - name: Download all binaries
+      - *version
+
+      - &binaries
+        name: Download all binaries
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: dist
           merge-multiple: true
 
-      - name: Checksums
+      - &checksums
+        name: Checksums
         working-directory: dist
         run: sha256sum * | tee SHA256SUMS.txt
 
@@ -146,15 +194,18 @@ jobs:
         with:
           subject-path: dist/*
 
-      - name: Release notes from CHANGELOG.md
+      - &notes
+        name: Release notes from CHANGELOG.md
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
           awk -v v="$VERSION" '
             index($0, "## [" v "]") == 1 { on = 1; next }
             /^## \[/ { on = 0 }
             on { print }
           ' CHANGELOG.md > notes.md
-          if [ ! -s notes.md ]; then printf 'aesx %s\n' "$VERSION" > notes.md; fi
+          if [ ! -s notes.md ]; then
+            echo "::warning::CHANGELOG.md has no section for $VERSION, so the release notes say no more than the version"
+            printf 'aesx %s\n' "$VERSION" > notes.md
+          fi
           RUNTIME=$(dotnet --list-runtimes | awk '/Microsoft.NETCore.App/ { v = $2 } END { print v }')
           {
             printf '\n---\n\n'
@@ -177,3 +228,35 @@ jobs:
             --title "aesx ${GITHUB_REF_NAME#v}" \
             --notes-file notes.md \
             $PRERELEASE
+
+  # What a release does before it publishes, with nothing published and no permission to.
+  rehearse:
+    name: Rehearsal, nothing published
+    needs: build
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - *checkout
+      - *toolchain
+      - *version
+      - *binaries
+      - *checksums
+      - *notes
+
+      - name: Say what a release would publish
+        run: |
+          {
+            echo "## Rehearsal of aesx $VERSION"
+            echo
+            echo "Built, tested and packaged on every release runner. Nothing was attested and no release was created."
+            echo
+            echo "A release of this commit would publish these files and this list of them (\`SHA256SUMS.txt\`), each with a provenance attestation:"
+            echo
+            echo '```'
+            cat dist/SHA256SUMS.txt
+            echo '```'
+            echo
+            echo "and these release notes:"
+            echo
+            cat notes.md
+          } >> "$GITHUB_STEP_SUMMARY"
