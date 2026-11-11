@@ -147,7 +147,9 @@ and only a repository admin can create one, so only an admin can trigger a relea
 1. Move the `Unreleased` entries in [`CHANGELOG.md`](../CHANGELOG.md) under a new version heading
    with today's date, and set `<Version>` in
    [`Directory.Build.props`](https://github.com/yohasacura/aesx/blob/main/Directory.Build.props).
-2. Open a pull request with that change, wait for the checks, and merge it.
+2. Open a pull request with that change. Because it changes the version, it starts a
+   [rehearsal of the release](#rehearsing-a-release) next to the usual checks. Wait for all of
+   them, the rehearsal included, and merge it.
 3. As a repository admin, tag the merge commit on `main` and push the tag (the tag rulesets
    refuse tags from anyone else, and refuse moving or deleting a tag afterwards):
 
@@ -166,6 +168,29 @@ build provenance of every file (`actions/attest-build-provenance`), and creates 
 release with the notes taken from the matching CHANGELOG section. A tag with a suffix such as
 `v1.3.0-rc.1` is published as a pre-release. Only the publishing job has write permissions
 (to create the release and to sign and store the attestation); the build jobs can only read.
+
+### Rehearsing a release
+
+A release tag cannot be taken back: if the workflow fails for good once the tag exists, that
+version number is spent. So the same workflow also runs without publishing anything. A pull
+request that changes `Directory.Build.props` or `release.yml` starts such a rehearsal by itself,
+and so does this, for any branch:
+
+```bash
+gh workflow run release.yml --ref my-branch -f version=1.2.3
+```
+
+Without `--ref` it rehearses `main`, and without `version` it takes the one in
+`Directory.Build.props`. A rehearsal runs the release's build job as it is, on the same six
+runners: the tests, the publishing of the binary, the self-tests, the scenarios and the
+packaging. Then it runs the same steps that write `SHA256SUMS.txt` and take the release notes out
+of the changelog, and shows both in the summary of the run. There it stops: nothing is attested,
+no release is created, the publishing job is skipped, and no job of a rehearsal has write
+permissions. What a rehearsal cannot try is what only that last job does, the attestation and
+the creation of the release.
+
+The rehearsal is not among the checks that `main` requires, so GitHub lets a pull request be
+merged while it is still running or after it has failed. Before a release, wait for it.
 
 ### Package managers
 
