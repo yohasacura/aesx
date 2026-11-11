@@ -436,18 +436,21 @@ public class FinderTests
     {
         if (!OperatingSystem.IsMacOS()) return;
         using var dir = new TempDir();
-        string[] files = [dir.File("one.txt"), dir.File("три 🔐.txt")];
+
+        // Four items, where the test with Automator has three. The dialogs are found by what
+        // they say, and no two tests should be waiting for the same words.
+        string[] files = [dir.File("one.txt"), dir.File("two.txt"), dir.File("три 🔐.txt")];
         foreach (string file in files) await File.WriteAllTextAsync(file, "contents of " + Path.GetFileName(file));
         Directory.CreateDirectory(dir.File("photos"));
         await File.WriteAllTextAsync(dir.File("photos/a.txt"), "a");
 
-        using Process aesx = Process.Start(Cli.StartInfo(new CliRun(), "--finder", "encrypt", "--", files[0], files[1], dir.File("photos")))!;
+        using Process aesx = Process.Start(Cli.StartInfo(new CliRun(), ["--finder", "encrypt", "--", .. files, dir.File("photos")]))!;
         Task<string> errors = aesx.StandardError.ReadToEndAsync();
         Task<string> output = aesx.StandardOutput.ReadToEndAsync();
         try
         {
-            if (!await Mac.AnswerAsync(["Encrypt 3 items", FinderDialogs.PasswordLabel], Pw, "OK", Patience, aesx)) return;
-            Assert.True(await Mac.AnswerAsync(["Encrypt 3 items", FinderDialogs.ConfirmLabel], Pw, "OK", Patience));
+            if (!await Mac.AnswerAsync(["Encrypt 4 items", FinderDialogs.PasswordLabel], Pw, "OK", Patience, aesx)) return;
+            Assert.True(await Mac.AnswerAsync(["Encrypt 4 items", FinderDialogs.ConfirmLabel], Pw, "OK", Patience));
             await aesx.WaitForExitAsync(new CancellationTokenSource(Patience).Token);
             Assert.True(aesx.ExitCode == 0, $"exit {aesx.ExitCode}\n{await output}\n{await errors}");
         }
@@ -570,9 +573,18 @@ public class FinderTests
         }
         finally
         {
-            // What Automator started is no child of this process; none of it may outlive the test.
-            await Mac.RunAsync("/usr/bin/pkill", null, "-f", executable + " --finder");
+            // What Automator started is no child of this process, and none of it may outlive the
+            // test: not aesx, and not a dialog it was showing, which is a process of its own and
+            // would be left on the screen for a later test to take for the one it is waiting for.
+            // Killed outright, aesx does not get to report in one more dialog that it was stopped.
+            string[] started = Pids(await Mac.RunAsync("/usr/bin/pgrep", null, "-f", executable + " --finder"));
+            var dialogs = new List<string>();
+            foreach (string pid in started) dialogs.AddRange(Pids(await Mac.RunAsync("/usr/bin/pgrep", null, "-P", pid)));
+            if (started.Length > 0) await Mac.RunAsync("/bin/kill", null, ["-9", .. started]);
+            if (dialogs.Count > 0) await Mac.RunAsync("/bin/kill", null, ["-9", .. dialogs]);
         }
+
+        static string[] Pids(ToolResult found) => found.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         static string[] Entries(string path) => Directory.GetFileSystemEntries(path).Select(e => Path.GetFileName(e)!).Where(n => n is not ("Services" or "Applications" or "it's a launcher")).Order(StringComparer.Ordinal).ToArray();
     }
@@ -739,14 +751,20 @@ public class FinderTests
             bool required = Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true";
             long started = Stopwatch.GetTimestamp();
             string last = "";
+            int refusals = 0;
             while (Stopwatch.GetElapsedTime(started) < patience)
             {
                 ToolResult result = await RunAsync("/usr/bin/osascript", Operate, ["-", typed ?? "", button, .. saying]);
                 if (result.ExitCode == 0 && result.Output.Trim() == "answered") return true;
                 last = result.ToString();
 
-                // Not allowed assistive access, or not allowed to talk to System Events at all.
-                if (result.Error.Contains("-1719", StringComparison.Ordinal) || result.Error.Contains("-25211", StringComparison.Ordinal) || result.Error.Contains("-1743", StringComparison.Ordinal))
+                // Not allowed assistive access (-1719, -25211), or not allowed to talk to System
+                // Events at all (-1743). But -1719 is also what the script gets for a dialog that
+                // went away while it was looking, which the one answered a moment ago does. That
+                // happens once; a Mac that does not allow this says so at every look.
+                bool refused = result.Error.Contains("-1719", StringComparison.Ordinal) || result.Error.Contains("-25211", StringComparison.Ordinal) || result.Error.Contains("-1743", StringComparison.Ordinal);
+                refusals = refused ? refusals + 1 : 0;
+                if (refusals == 5)
                 {
                     Assert.False(required, $"the runner does not let the test operate the dialog:\n{last}");
                     return false;
